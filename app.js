@@ -279,22 +279,26 @@
       await loadScript(LIBS.pdf);
       window.pdfjsLib.GlobalWorkerOptions.workerSrc = LIBS.pdfWorker;
       const pdf = await window.pdfjsLib.getDocument({ data: await f.arrayBuffer() }).promise;
-      const pages = [];
-      for (let i = 1; i <= Math.min(pdf.numPages, 4); i++) {
+      const pages = [], pageTexts = [];
+      const N = Math.min(pdf.numPages, 8);
+      for (let i = 1; i <= N; i++) {
         const page = await pdf.getPage(i);
         const text = pdfLines(await page.getTextContent());
-        out.texts.push(text);
+        out.texts.push(text); pageTexts.push(text);
         const t = I.parseText(text);
         if (t) out.tables.push({ t, text, src: `${name} hal. ${i}` });
-        const vp0 = page.getViewport({ scale: 1 }), vp = page.getViewport({ scale: Math.min(3, 1800 / vp0.width) });
+        status(`Membuka PDF ${name}… hal. ${i}/${N}`);
+        const vp0 = page.getViewport({ scale: 1 }), vp = page.getViewport({ scale: Math.min(4, 2400 / vp0.width) });
         const c = document.createElement("canvas"); c.width = vp.width; c.height = vp.height;
         const g = c.getContext("2d"); g.fillStyle = "#fff"; g.fillRect(0, 0, c.width, c.height);
         await page.render({ canvasContext: g, viewport: vp }).promise;
         pages.push(c);
-        if (i === 1) out.refs.push(refFromCanvas(c, `${name} hal. 1`));
+        if (i > 1 || N === 1) out.refs.push(refFromCanvas(c, `${name} hal. ${i}`)); // skip the cover page
       }
       if (!out.tables.length) {
-        for (let i = 0; i < Math.min(pages.length, 2); i++) {
+        // OCR pages that talk about sizes first, then the others
+        const order = pages.map((_, i) => i).sort((a, b) => (/size|ukuran|chart|tabel/i.test(pageTexts[b]) ? 1 : 0) - (/size|ukuran|chart|tabel/i.test(pageTexts[a]) ? 1 : 0));
+        for (const i of order.slice(0, 4)) {
           const r = await ocrTable(pages[i], `${name} hal. ${i + 1}`, out);
           if (r) { out.tables.push({ t: r.t, text: r.text, src: `${name} hal. ${i + 1} (foto)` }); break; }
         }
