@@ -163,18 +163,27 @@
   // ---------------- shared blocks ----------------
   // bodice half: HPS level at y=0, centre line at x=0
   function bodiceCurves(o) {
-    const { nw, bnd, fnd, slope, S, C, AH } = o;
+    const { nw, bnd, fnd, slope, S, C, AH, setIn } = o;
     const hps = [nw, 0], sp = [S / 2, -slope], ua = [C / 2, -AH], dx = C / 2 - S / 2;
-    const fit = dx < 2; // set-in sleeve: armhole scoops inward
+    // set-in armhole: leaves the shoulder at ~90°, scoops in to the across-front/back width,
+    // then rounds out to the underarm, meeting the side seam square.
+    function setInAH(across, level) {
+      const d = norm(sub(sp, hps)), perp = [d[1], -d[0]]; // perpendicular to shoulder, pointing down
+      const A = [across, level];
+      const up = bez(sp, add(sp, mul(perp, (sp[1] - level) * 0.35)), [across, level + (sp[1] - level) * 0.35], A, 24);
+      const k = ua[0] - across, h = level - ua[1];
+      const low = bez(A, [across, level - h * 0.55], [ua[0] - k * 0.55, ua[1]], ua, 24);
+      return up.concat(low.slice(1));
+    }
     return {
       hps, sp, ua,
       frontNeck: bez([nw, 0], [nw, -fnd * 0.55], [nw * 0.55, -fnd], [0, -fnd]),
       backNeck: bez([0, -bnd], [nw * 0.5, -bnd], [nw * 0.88, -bnd * 0.45], [nw, 0]),
-      backAH: fit
-        ? bez(sp, [S / 2 - 0.4, -slope - (AH - slope) * 0.35], [S / 2 - 0.6 + (C / 2 - S / 2) * 0.1, -AH + 1.0], [ua[0] - 2.5, -AH], 24).concat(bez([ua[0] - 2.5, -AH], [ua[0] - 1.6, -AH], [ua[0] - 0.6, -AH], ua, 8).slice(1))
+      backAH: setIn
+        ? setInAH(S / 2 - 1.0, -slope - (AH - slope) * 0.5)
         : bez(sp, [S / 2 + 0.3, -slope - (AH - slope) * 0.5], [S / 2 + dx * 0.35, -AH], ua),
-      frontAH: fit
-        ? bez(sp, [S / 2 - 1.2, -slope - (AH - slope) * 0.35], [S / 2 - 1.6 + (C / 2 - S / 2) * 0.1, -AH + 1.0], [ua[0] - 3.0, -AH], 24).concat(bez([ua[0] - 3.0, -AH], [ua[0] - 2.0, -AH], [ua[0] - 0.8, -AH], ua, 8).slice(1))
+      frontAH: setIn
+        ? setInAH(S / 2 - 1.8, -slope - (AH - slope) * 0.45)
         : bez(sp, [S / 2 - 0.8, -slope - (AH - slope) * 0.45], [S / 2 + dx * 0.15, -AH], ua),
     };
   }
@@ -234,7 +243,7 @@
     draft(m, p) {
       const C = m.chest, L = m.length, S = m.shoulder, sa = p.sa, hem = p.hem;
       const nw = 0.14 * C + 1, bnd = 2.0, fnd = 0.1 * C + 4, slope = 4.0, AH = 0.44 * C + 2.5;
-      const c = bodiceCurves({ nw, bnd, fnd, slope, S, C, AH });
+      const c = bodiceCurves({ nw, bnd, fnd, slope, S, C, AH, setIn: true });
       const fr = new Piece({
         name: "BADAN DEPAN", cut: "Potong 1 lipat",
         edges: [[line([0, -L], [C / 2, -L]), hem], [line([C / 2, -L], c.ua), sa], [rev(c.frontAH), sa], [line(c.sp, c.hps), sa], [c.frontNeck, sa], [line([0, -fnd], [0, -L]), 0]],
@@ -287,7 +296,7 @@
       const C = m.chest, L = m.length, S = m.shoulder, sa = p.sa, hem = p.hem;
       const nw = 0.13 * C + 0.8, bnd = 2.0, fnd = 0.13 * C + 1.0, slope = 4.5, AH = 0.42 * C + 2.0;
       const ext = 1.5, fac = 3.5; // button stand + folded facing (grown-on)
-      const c = bodiceCurves({ nw, bnd, fnd, slope, S, C, AH });
+      const c = bodiceCurves({ nw, bnd, fnd, slope, S, C, AH, setIn: true });
       const YD = 0.15 * C + 1; // yoke depth at CB from HPS level
       const fr = new Piece({
         name: "BADAN DEPAN", cut: "Potong 2 (kiri-kanan berpasangan)",
