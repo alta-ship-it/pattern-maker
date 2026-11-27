@@ -57,6 +57,12 @@
   .refs button { position:absolute; top:4px; right:4px; border:none; border-radius:999px; background:#000a; color:#fff; width:26px; height:26px; cursor:pointer; }
   .bar { height:6px; background:var(--line); border-radius:9px; overflow:hidden; margin-top:8px; }
   .bar i { display:block; height:100%; width:0; background:var(--acc); transition:width .2s; }
+  .gen { text-align:center; }
+  .btn.big { font-size:17px; padding:14px 26px; width:100%; max-width:420px; min-height:52px; }
+  .restitle { font-size:20px !important; text-transform:none !important; letter-spacing:0 !important; color:var(--ink) !important; margin:12px 0 4px !important; }
+  .row.top { margin-top:0; }
+  main[hidden] { display:none; }
+  .busy { opacity:.6; pointer-events:none; }
   @media (min-width: 900px) { main { grid-template-columns: minmax(0,1fr) minmax(0,1fr); } .wide { grid-column: 1 / -1; } }
 </style>
 </head>
@@ -65,7 +71,7 @@
   <h1>Pattern Maker ✂️</h1>
   <p>Isi size chart → pola semua size jadi otomatis → download PDF (plotter 1:1 atau A4).</p>
 </header>
-<main>
+<main id="vInput">
   <section class="card wide upl">
     <h2>Upload file dari client <span class="opt">(opsional)</span></h2>
     <label class="drop" id="drop">
@@ -93,13 +99,28 @@
     </div>
   </section>
 
-  <section class="card">
+  <section class="card wide">
     <h2>3. Pengaturan</h2>
     <div class="params" id="params"></div>
   </section>
 
-  <section class="card">
-    <h2>4. Download</h2>
+  <section class="card wide gen">
+    <button class="btn solid big" id="generate">Generate Pola →</button>
+    <p class="err" id="err"></p>
+  </section>
+</main>
+
+<main id="vResult" hidden>
+  <section class="card wide">
+    <div class="row top">
+      <button class="btn" id="back">← Ubah ukuran</button>
+    </div>
+    <h2 id="resTitle" class="restitle"></h2>
+    <p class="desc" id="resSub"></p>
+  </section>
+
+  <section class="card wide">
+    <h2>Download</h2>
     <div class="row">
       <label class="note">Lebar kertas plotter
         <select id="plotW"><option>90</option><option>120</option><option selected>150</option><option>165</option><option>183</option></select> cm
@@ -109,9 +130,14 @@
       <button class="btn solid" id="dlPlot">⬇ PDF Plotter (1:1)</button>
       <button class="btn solid" id="dlA4">⬇ PDF A4 (sambung)</button>
     </div>
-    <p class="note">Pola FreeSewing © Joost De Cock & kontributor (lisensi MIT, <a href="https://freesewing.eu" target="_blank" rel="noopener">freesewing.eu</a>).</p>
     <p class="note">Print 100% / “actual size”, lalu ukur KOTAK UJI 5×5 cm. Kampuh & kelim sudah termasuk di pola. Wajib jahit sampel dulu sebelum produksi.</p>
-    <p class="err" id="err"></p>
+    <p class="note" id="fsCredit">Pola FreeSewing © Joost De Cock & kontributor (lisensi MIT, <a href="https://freesewing.eu" target="_blank" rel="noopener">freesewing.eu</a>).</p>
+    <p class="err" id="err2"></p>
+  </section>
+
+  <section class="card wide">
+    <h2>Cek ukuran pola</h2>
+    <div class="tablewrap"><table id="checks"></table></div>
   </section>
 
   <section class="card wide">
@@ -121,11 +147,6 @@
     </div>
     <div class="legend" id="legend"></div>
     <div id="preview"></div>
-  </section>
-
-  <section class="card wide">
-    <h2>Cek ukuran pola</h2>
-    <div class="tablewrap"><table id="checks"></table></div>
   </section>
 </main>
 <script src="lib/jspdf.umd.min.js"></script>

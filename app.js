@@ -4,6 +4,7 @@
   const P = window.PolaPDF;
   const $ = (id) => document.getElementById(id);
   const clone = (o) => JSON.parse(JSON.stringify(o));
+  const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 
   const store = {
     get(k) { try { return JSON.parse(localStorage.getItem(k)); } catch (e) { return null; } },
@@ -76,37 +77,56 @@
     }));
   }
 
-  let lastRun = null, upTimer = null;
-  function update() {
-    clearTimeout(upTimer);
-    $("checks").style.opacity = $("preview").style.opacity = 0.4;
-    upTimer = setTimeout(updateNow, 30);
-  }
-  function updateNow() {
-    $("checks").style.opacity = $("preview").style.opacity = 1;
-    const M = MODELS[modelId];
-    $("err").textContent = "";
-    const sizes = Object.keys(state.chart);
+  // ---------- input -> Generate -> result page ----------
+  let lastRun = null; // {run, model, chart, params}
+  function update() { lastRun = null; $("err").textContent = ""; }
+
+  function renderResult() {
+    const { run, model } = lastRun;
+    const sizes = run.sizes;
+    $("resTitle").textContent = `${model.name} — ${sizes.join(", ")}`;
+    $("resSub").textContent = model.desc;
+    $("fsCredit").hidden = model.source !== "FreeSewing";
     const sel = $("pvSize"), cur = sel.value;
-    sel.innerHTML = `<option value="">Semua size (bertumpuk)</option>` + sizes.map((s) => `<option ${s === cur ? "selected" : ""}>${s}</option>`).join("");
-    $("legend").innerHTML = sizes.map((s, i) => `<span style="--c:${P.COLORS[i % P.COLORS.length]}">${s}</span>`).join("");
-    try {
-      const run = P.runModel(M, state.chart, state.params);
-      lastRun = { run, key: JSON.stringify([modelId, state]) };
-      $("preview").innerHTML = P.previewSVG(M, state.chart, state.params, { width: 150, size: sel.value || null, run });
-      const rows = run.results[sizes[0]].checks.map((c, i) => `<tr><td>${c[0]}</td>` + sizes.map((s) => `<td>${run.results[s].checks[i][1]}</td>`).join("") + "</tr>");
-      $("checks").innerHTML = "<tr><th>Ukuran</th>" + sizes.map((s, i) => `<th style="color:${P.COLORS[i % P.COLORS.length]}">${s}</th>`).join("") + "</tr>" + rows.join("");
-      $("dlPlot").disabled = $("dlA4").disabled = false;
-    } catch (e) {
-      $("preview").innerHTML = "";
-      $("err").textContent = "Pola tidak bisa dibuat dengan ukuran ini. Cek lagi angka di size chart.\n(" + e.message + ")";
-      $("dlPlot").disabled = $("dlA4").disabled = true;
-    }
+    sel.innerHTML = `<option value="">Semua size (bertumpuk)</option>` + sizes.map((s) => `<option ${s === cur ? "selected" : ""}>${esc(s)}</option>`).join("");
+    $("legend").innerHTML = sizes.map((s, i) => `<span style="--c:${P.COLORS[i % P.COLORS.length]}">${esc(s)}</span>`).join("");
+    $("preview").innerHTML = P.previewSVG(model, lastRun.chart, lastRun.params, { width: 150, size: sel.value || null, run });
+    const rows = run.results[sizes[0]].checks.map((c, i) => `<tr><td>${esc(c[0])}</td>` + sizes.map((s) => `<td>${esc(run.results[s].checks[i][1])}</td>`).join("") + "</tr>");
+    $("checks").innerHTML = "<tr><th>Ukuran</th>" + sizes.map((s, i) => `<th style="color:${P.COLORS[i % P.COLORS.length]}">${esc(s)}</th>`).join("") + "</tr>" + rows.join("");
+    $("err2").textContent = "";
   }
+  function showView(result) {
+    $("vInput").hidden = result; $("vResult").hidden = !result;
+    window.scrollTo(0, 0);
+  }
+  function generate() {
+    const btn = $("generate");
+    $("err").textContent = "";
+    btn.classList.add("busy"); btn.textContent = "Membuat pola…";
+    setTimeout(() => {
+      try {
+        const model = MODELS[modelId];
+        const chart = clone(state.chart), params = clone(state.params);
+        lastRun = { run: P.runModel(model, chart, params), model, chart, params };
+        renderResult();
+        if (location.hash !== "#hasil") location.hash = "hasil"; else showView(true);
+        showView(true);
+      } catch (e) {
+        lastRun = null;
+        $("err").textContent = "Pola tidak bisa dibuat dengan ukuran ini. Cek lagi angka di size chart.\n(" + e.message + ")";
+      } finally { btn.classList.remove("busy"); btn.textContent = "Generate Pola →"; }
+    }, 30);
+  }
+  $("generate").onclick = generate;
+  $("back").onclick = () => { if (location.hash === "#hasil") history.back(); else showView(false); };
+  window.addEventListener("hashchange", () => {
+    if (location.hash === "#hasil") { if (lastRun) showView(true); else generate(); }
+    else showView(false);
+  });
 
   function renderAll() { renderModels(); renderChart(); renderParams(); update(); }
 
-  $("pvSize").onchange = update;
+  $("pvSize").onchange = () => lastRun && renderResult();
   $("addSize").onclick = () => {
     const sizes = Object.keys(state.chart), last = state.chart[sizes[sizes.length - 1]];
     const name = (prompt("Nama size baru (mis. 3XL):", "") || "").trim().toUpperCase();
@@ -120,15 +140,14 @@
     if (!confirm("Kembalikan size chart & pengaturan ke contoh awal?")) return;
     store.set("pola:" + modelId, null); state = load(modelId); renderAll();
   };
-  const runFor = () => (lastRun && lastRun.key === JSON.stringify([modelId, state]) ? lastRun.run : undefined);
-  const fname = (kind) => `Pola_${MODELS[modelId].name.replace(/\s+/g, "_")}_${Object.keys(state.chart).join("-")}_${kind}.pdf`;
+  const fname = (kind) => `Pola_${lastRun.model.name.replace(/[^\w]+/g, "_")}_${lastRun.run.sizes.join("-")}_${kind}.pdf`;
   $("dlPlot").onclick = () => {
-    try { P.plotterPDF(MODELS[modelId], state.chart, state.params, parseFloat($("plotW").value), { refs, run: runFor() }).doc.save(fname("PLOTTER")); }
-    catch (e) { $("err").textContent = "Gagal membuat PDF: " + e.message; }
+    try { P.plotterPDF(lastRun.model, lastRun.chart, lastRun.params, parseFloat($("plotW").value), { refs, run: lastRun.run }).doc.save(fname("PLOTTER")); }
+    catch (e) { $("err2").textContent = "Gagal membuat PDF: " + e.message; }
   };
   $("dlA4").onclick = () => {
-    try { P.a4PDF(MODELS[modelId], state.chart, state.params, { refs, run: runFor() }).doc.save(fname("A4")); }
-    catch (e) { $("err").textContent = "Gagal membuat PDF: " + e.message; }
+    try { P.a4PDF(lastRun.model, lastRun.chart, lastRun.params, { refs, run: lastRun.run }).doc.save(fname("A4")); }
+    catch (e) { $("err2").textContent = "Gagal membuat PDF: " + e.message; }
   };
 
   // ================= UPLOAD FROM CLIENT =================
@@ -151,7 +170,6 @@
   let refs = [];      // reference pictures for the PDFs: {data, w, h, type, name}
   let undoState = null;
   let ocrWorker = null;
-  const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 
   function status(msg, prog) {
     $("upStatus").innerHTML = msg ? esc(msg) + (prog != null ? `<div class="bar"><i style="width:${Math.round(prog * 100)}%"></i></div>` : "") : "";
@@ -178,19 +196,60 @@
       img.src = url;
     });
   }
-  async function ocr(canvas, label) {
+  let ocrLabel = "";
+  async function ocr(canvas, label, psm = "6") {
     await loadScript(LIBS.tess);
+    ocrLabel = label;
     if (!ocrWorker) {
       status("Menyiapkan pembaca tulisan (OCR)… pertama kali agak lama", 0);
       ocrWorker = await window.Tesseract.createWorker("eng", 1, {
-        logger: (m) => { if (m.status === "recognizing text") status(`Membaca tulisan di ${label}…`, m.progress); },
+        logger: (m) => { if (m.status === "recognizing text") status(`Membaca tulisan di ${ocrLabel}…`, m.progress); },
       });
-      await ocrWorker.setParameters({ tessedit_pageseg_mode: "6", preserve_interword_spaces: "1" });
     }
+    await ocrWorker.setParameters({ tessedit_pageseg_mode: psm, preserve_interword_spaces: "1" });
     status(`Membaca tulisan di ${label}…`, 0);
     const { data } = await ocrWorker.recognize(canvas);
     return data.text || "";
   }
+  // enlarge, turn black/white and erase table grid lines (long straight runs) — OCR reads tables much better
+  function cleanForOcr(src) {
+    const scale = Math.max(1, Math.min(3, 2400 / src.width));
+    const c = document.createElement("canvas");
+    c.width = Math.round(src.width * scale); c.height = Math.round(src.height * scale);
+    if (c.width * c.height > 24e6) { const k = Math.sqrt(24e6 / (c.width * c.height)); c.width = Math.round(c.width * k); c.height = Math.round(c.height * k); }
+    const g = c.getContext("2d", { willReadFrequently: true });
+    g.fillStyle = "#fff"; g.fillRect(0, 0, c.width, c.height);
+    g.imageSmoothingQuality = "high"; g.drawImage(src, 0, 0, c.width, c.height);
+    const W = c.width, H = c.height, img = g.getImageData(0, 0, W, H), d = img.data;
+    const dark = new Uint8Array(W * H);
+    for (let i = 0, j = 0; i < d.length; i += 4, j++) dark[j] = (d[i] * 0.299 + d[i + 1] * 0.587 + d[i + 2] * 0.114) < 165 ? 1 : 0;
+    const kill = new Uint8Array(W * H), RUN = Math.max(36, Math.round(14 * (W / src.width)));
+    for (let y = 0; y < H; y++) { let s = -1; for (let x = 0; x <= W; x++) { const on = x < W && dark[y * W + x]; if (on && s < 0) s = x; if (!on && s >= 0) { if (x - s >= RUN) for (let k = s; k < x; k++) kill[y * W + k] = 1; s = -1; } } }
+    for (let x = 0; x < W; x++) { let s = -1; for (let y = 0; y <= H; y++) { const on = y < H && dark[y * W + x]; if (on && s < 0) s = y; if (!on && s >= 0) { if (y - s >= RUN) for (let k = s; k < y; k++) kill[k * W + x] = 1; s = -1; } } }
+    for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+      const j = y * W + x;
+      let k = kill[j] || (x > 0 && kill[j - 1]) || (x < W - 1 && kill[j + 1]) || (y > 0 && kill[j - W]) || (y < H - 1 && kill[j + W]) ||
+        (x > 1 && kill[j - 2]) || (x < W - 2 && kill[j + 2]) || (y > 1 && kill[j - 2 * W]) || (y < H - 2 && kill[j + 2 * W]);
+      const v = dark[j] && !k ? 0 : 255;
+      d[j * 4] = d[j * 4 + 1] = d[j * 4 + 2] = v; d[j * 4 + 3] = 255;
+    }
+    g.putImageData(img, 0, 0);
+    return c;
+  }
+  // try several OCR passes until a size table is found
+  async function ocrTable(canvas, label, out) {
+    let clean = null;
+    const tries = [["clean", "6"], ["raw", "6"], ["clean", "4"], ["clean", "11"]];
+    for (const [kind, psm] of tries) {
+      if (kind === "clean" && !clean) clean = cleanForOcr(canvas);
+      const text = await ocr(kind === "raw" ? canvas : clean, label, psm);
+      out.texts.push(text);
+      const t = I.parseText(text);
+      if (t && t.rows.length >= 2) return { t, text };
+    }
+    return null;
+  }
+
   function pdfLines(content) {
     const rows = new Map();
     for (const it of content.items) {
@@ -236,19 +295,16 @@
       }
       if (!out.tables.length) {
         for (let i = 0; i < Math.min(pages.length, 2); i++) {
-          const text = await ocr(pages[i], `${name} hal. ${i + 1}`);
-          out.texts.push(text);
-          const t = I.parseText(text);
-          if (t) { out.tables.push({ t, text, src: `${name} hal. ${i + 1} (foto)` }); break; }
+          const r = await ocrTable(pages[i], `${name} hal. ${i + 1}`, out);
+          if (r) { out.tables.push({ t: r.t, text: r.text, src: `${name} hal. ${i + 1} (foto)` }); break; }
         }
       }
     } else if (f.type.startsWith("image/") || ["jpg", "jpeg", "png", "webp", "heic", "gif", "bmp"].includes(ext)) {
       const img = await loadImage(f);
-      const text = await ocr(canvasFromImage(img, 1600, 3000), name);
-      out.texts.push(text);
-      const t = I.parseText(text);
-      if (t) out.tables.push({ t, text, src: name });
-      else out.refs.push(refFromCanvas(canvasFromImage(img, 0, 1400), name)); // no table: treat as mockup
+      const r = await ocrTable(canvasFromImage(img, 1600, 3000), name, out);
+      if (r) out.tables.push({ t: r.t, text: r.text, src: name });
+      // keep every picture as a reference for the PDF (mockups, size-chart drawings)
+      out.refs.push(refFromCanvas(canvasFromImage(img, 0, 1400), name));
     } else {
       out.skipped.push(name);
     }
@@ -311,4 +367,5 @@
   drop.addEventListener("drop", (e) => handleFiles(e.dataTransfer.files));
 
   renderAll();
+  if (location.hash === "#hasil") history.replaceState(null, "", location.pathname + location.search);
 })();

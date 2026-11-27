@@ -7,17 +7,17 @@
 
   // measurement words -> candidate field keys (the first key the model has wins)
   const SYN = [
-    { keys: ["opening"], words: ["sleeve opening", "ujung lengan", "lebar ujung lengan", "lingkar ujung lengan", "leg opening", "bottom opening", "lingkar bawah celana"] },
+    { keys: ["opening"], words: ["sleeve opening", "lebar lengan", "lebar ujung", "ujung lengan", "lebar ujung lengan", "lingkar ujung lengan", "leg opening", "bottom opening", "lingkar bawah celana"] },
     { keys: ["cuff", "opening"], words: ["cuff", "manset"] },
-    { keys: ["chest"], words: ["lebar dada", "lingkar dada", "chest", "dada", "bust", "pit to pit", "p2p", "body width", "width", "ld", "lebar"] },
-    { keys: ["shoulder"], words: ["lebar bahu", "shoulder", "bahu", "lb"] },
-    { keys: ["sleeve"], words: ["panjang lengan", "sleeve length", "sleeve", "lengan", "pl"] },
+    { keys: ["chest"], words: ["lebar badan", "lebar dada", "lingkar dada", "chest", "dada", "bust", "pit to pit", "p2p", "body width", "width", "ld", "lebar"] },
+    { keys: ["shoulder"], words: ["lebar bahu", "pundak bahu", "pundak", "shoulder", "bahu", "lb"] },
+    { keys: ["sleeve"], words: ["panjang lengan", "panjang tangan", "pjg lengan", "pjg tangan", "sleeve length", "sleeve", "lengan", "tangan", "pl"] },
     { keys: ["waist"], words: ["lingkar pinggang", "pinggang", "waist", "lp"] },
     { keys: ["hip"], words: ["lingkar pinggul", "lebar pinggul", "pinggul", "panggul", "hips", "hip"] },
     { keys: ["rise"], words: ["pesak depan", "front rise", "pesak", "rise"] },
     { keys: ["thigh"], words: ["lebar paha", "lingkar paha", "paha", "thigh"] },
     { keys: ["hemw", "opening"], words: ["lebar bawah", "lingkar bawah", "bottom width", "hem width", "sweep", "hem", "bawah"] },
-    { keys: ["length"], words: ["panjang badan", "panjang celana", "panjang rok", "body length", "total length", "length", "panjang", "pb"] },
+    { keys: ["length"], words: ["panjang badan", "pjg badan", "panjang baju", "panjang celana", "panjang rok", "body length", "total length", "length", "panjang", "pb"] },
   ];
 
   const MODEL_WORDS = [
@@ -122,28 +122,66 @@
   }
 
   // ---------- OCR text ----------
+  const LADDER = ["XXXS", "XXS", "XS", "S", "M", "L", "XL", "XXL", "XXXL", "4XL", "5XL", "6XL"];
+  const LADDER2 = { XXL: "2XL", XXXL: "3XL" };
+  function extendSizes(sizes, n) {
+    if (sizes.length >= n) return sizes.slice(0, n);
+    const norm2 = (x) => ({ "2XL": "XXL", "3XL": "XXXL" }[x] || x);
+    const i = LADDER.indexOf(norm2(sizes[0]));
+    if (i < 0) return sizes;
+    const use2 = sizes.some((x) => /^\dXL$/.test(x));
+    const out = LADDER.slice(i, i + n).map((x) => (use2 && LADDER2[x] ? LADDER2[x] : x));
+    return out.length === n ? out : sizes;
+  }
+  const UNIT_WORDS = /^(size|sizes|ukuran|uk|cm|em|crn|inch|in|:|-|—|tabel|chart)$/i;
+
   function parseText(text) {
-    const lines = String(text).split(/\r?\n/).map(norm).filter(Boolean);
+    const lines = String(text).split(/\r?\n/).map((l) => norm(l.replace(/[|[\]{}()“”"_=:;]/g, " "))).filter(Boolean);
     // A) a line holding the sizes, then "LABEL v v v" lines
     for (let i = 0; i < lines.length; i++) {
       const toks = lines[i].split(" ");
       const numHdr = /^(size|sizes|ukuran|uk|no)\b/i.test(toks[0] || "");
       const sz = toks.filter((t) => isSize(t) || (numHdr && /^(2[4-9]|3\d|4[0-8])$/.test(t)));
-      if (sz.length >= 2 && sz.length >= toks.length - 2) {
-        const sizes = sz.map(sizeName), rows = [];
+      const other = toks.filter((t) => !isSize(t) && !UNIT_WORDS.test(t) && !(numHdr && /^\d+$/.test(t)));
+      if (sz.length >= 2 && other.length <= Math.max(2, sz.length - 1)) {
+        let sizes = sz.map(sizeName);
+        if (new Set(sizes).size < sizes.length) sizes = extendSizes([sizes[0]], sizes.length);
+        const rows = [];
         for (let k = i + 1; k < lines.length; k++) {
           const t = lines[k].split(" ");
-          // numbers are the trailing tokens
           const vals = [];
           let p = t.length - 1;
-          while (p >= 0 && vals.length < sizes.length && num(t[p]) !== null) { vals.unshift(num(t[p])); p--; }
+          while (p >= 0 && vals.length < 12 && num(t[p]) !== null) { vals.unshift(num(t[p])); p--; }
           const label = t.slice(0, p + 1).join(" ");
           const lab = matchLabel(label);
-          if (!lab || vals.length < Math.max(2, sizes.length - 1)) continue;
-          while (vals.length < sizes.length) vals.push(null);
+          if (!lab || vals.length < 2) continue;
           rows.push({ lab, label, values: vals });
         }
-        if (rows.length) return { sizes, rows };
+        if (rows.length) {
+          // more numbers than readable size names (OCR noise in the header): extend the size ladder
+          const counts = rows.map((r) => r.values.length).sort((a, b) => a - b);
+          const n = counts[Math.floor(counts.length / 2)];
+          if (n > sizes.length) sizes = extendSizes(sizes, n);
+          for (const r of rows) { r.values = r.values.slice(-sizes.length); while (r.values.length < sizes.length) r.values.unshift(null); }
+          return { sizes, rows };
+        }
+      }
+    }
+    // C) no readable size header: labelled rows with the same count of numbers -> S, M, L, ...
+    {
+      const rows = [];
+      for (const l of lines) {
+        const t = l.split(" "), vals = [];
+        let p = t.length - 1;
+        while (p >= 0 && vals.length < 12 && num(t[p]) !== null) { vals.unshift(num(t[p])); p--; }
+        const lab = matchLabel(t.slice(0, p + 1).join(" "));
+        if (lab && vals.length >= 3) rows.push({ lab, label: t.slice(0, p + 1).join(" "), values: vals });
+      }
+      if (rows.length >= 2) {
+        const counts = rows.map((r) => r.values.length).sort((a, b) => a - b);
+        const n = counts[Math.floor(counts.length / 2)];
+        const good = rows.filter((r) => r.values.length === n);
+        if (good.length >= 2) return { sizes: extendSizes(["S"], n), rows: good, guessedSizes: true };
       }
     }
     // B) lines starting with a size: "M 59 68 50 62", header line before them
@@ -180,10 +218,51 @@
     return null;
   }
 
+  // plausible raw values per field (before halving a full circumference)
+  const RANGE = { chest: [25, 180], waist: [20, 160], hip: [30, 180], thigh: [15, 100], opening: [8, 90], cuff: [8, 40], length: [15, 140], shoulder: [25, 75], sleeve: [5, 95], rise: [15, 50], hemw: [20, 200] };
+  // OCR slips like "230" for 23 or "558" for 58: repair using the field range and the neighbours
+  function repairRow(vals, key) {
+    const [lo, hi] = RANGE[key] || [0, 1e9];
+    const cands = (v) => { const s = String(v).replace(".", ""); return [v, v / 10, parseFloat(s.slice(1)), parseFloat(s.slice(0, -1)), v / 100].filter((c) => isFinite(c) && c > 0); };
+    const expect = (arr, i) => {
+      const L = arr.slice(0, i).filter((x) => x != null), R = arr.slice(i + 1).filter((x) => x != null);
+      const l = L[L.length - 1], r = R[0];
+      if (l != null && r != null) return (l + r) / 2;
+      const ok = arr.filter((x) => x != null).sort((a, b) => a - b);
+      return l != null ? l : r != null ? r : ok[Math.floor(ok.length / 2)];
+    };
+    let fixed = 0;
+    let out = vals.map((v) => (v != null && (v < lo || v > hi) ? NaN : v));
+    // 1) out-of-range values
+    out = out.map((v, i) => {
+      if (!Number.isNaN(v)) return v;
+      fixed++;
+      const e = expect(out.map((x) => (Number.isNaN(x) ? null : x)), i);
+      const ok = cands(vals[i]).filter((c) => c >= lo && c <= hi);
+      if (!ok.length) return null;
+      return e == null ? ok[0] : ok.sort((p, q) => Math.abs(p - e) - Math.abs(q - e))[0];
+    });
+    // 2) values far from the row median
+    const good = out.filter((x) => x != null).sort((p, q) => p - q);
+    if (good.length >= 3) {
+      const med = good[Math.floor(good.length / 2)], bad = (x) => x > med * 1.35 || x < med * 0.7;
+      out = out.map((v, i) => {
+        if (v == null || !bad(v)) return v;
+        fixed++;
+        const e = expect(out.map((x, j) => (j === i || (x != null && bad(x)) ? null : x)), i);
+        const ok = cands(vals[i] != null ? vals[i] : v).filter((c) => c >= lo && c <= hi && !bad(c));
+        return ok.length ? ok.sort((p, q) => Math.abs(p - e) - Math.abs(q - e))[0] : null;
+      });
+    }
+    fixed = out.filter((v, i) => v != null && v !== vals[i]).length;
+    return { vals: out, fixed };
+  }
+
   // ---------- table -> model chart ----------
   // returns {chart, notes[]}; fills missing fields from the model's example chart
   function toChart(table, model, opts = {}) {
     const notes = [];
+    if (table.guessedSizes) notes.push(`Nama size tidak terbaca → ditebak ${table.sizes.join(", ")}. Ganti di tabel kalau beda.`);
     const fieldKeys = model.fields.map((f) => f.k);
     const byKey = {};
     for (const r of table.rows) {
@@ -205,7 +284,9 @@
         notes.push(`"${f.label}" tidak ada di file → diisi angka contoh, mohon dicek.`);
         continue;
       }
-      let v = r.values.map((x) => (x == null ? null : Math.round(x * factor * 10) / 10));
+      const rep = repairRow(r.values, f.k);
+      if (rep.fixed) notes.push(`"${f.label}": ${rep.fixed} angka sepertinya salah baca → sudah dikoreksi, mohon dicek.`);
+      let v = rep.vals.map((x) => (x == null ? null : Math.round(x * factor * 10) / 10));
       // fill gaps by interpolation
       const gaps = v.map((x, i) => (x == null ? i : -1)).filter((i) => i >= 0);
       if (gaps.length && gaps.length < v.length) {
