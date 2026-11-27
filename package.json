@@ -1,0 +1,9 @@
+{
+  "name": "pattern-maker",
+  "version": "1.0.0",
+  "description": "Generator pola jahit otomatis dari size chart (PDF plotter 1:1 & A4)",
+  "private": true,
+  "scripts": { "samples": "node tools/generate-samples.js" },
+  "devDependencies": { "jspdf": "2.5.1" },
+  "license": "MIT"
+}
