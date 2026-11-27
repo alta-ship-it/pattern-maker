@@ -22,6 +22,23 @@ Model ditebak dari tulisan di file (misalnya "coach jacket", "kemeja", "celana")
 
 ## Model yang tersedia
 
+### Pola FreeSewing (sudah teruji komunitas)
+
+Pola-pola ini memakai desain dari [FreeSewing](https://freesewing.eu) (lisensi MIT, boleh dipakai komersial). Size chart tetap diisi dengan **ukuran jadi (flat)**. Aplikasi mengubahnya otomatis menjadi ukuran badan dan ease, lalu mencocokkan hasilnya dengan size chart. Lebar dada, panjang, bahu, lengan, pesak, dan lebar bawah disetel ulang sampai cocok. Hasilnya bisa dicek di tabel **Cek ukuran pola**.
+
+| Model | Desain FreeSewing |
+|---|---|
+| Kaos | Teagan |
+| Kemeja | Simon |
+| Sweater crewneck | Sven |
+| Hoodie raglan | Hugo |
+| Celana chino | Charlie |
+| Celana karet / jogger | Paco |
+| Rok pensil | Penelope |
+| Rok lingkar / payung | Sandy |
+
+### Pola buatan Pattern Maker
+
 | Model | Potongan |
 |---|---|
 | Kaos Oblong | badan depan, badan belakang, lengan, rib leher |
@@ -47,6 +64,9 @@ Semua pola sudah termasuk kampuh, kelim, takik (1 = depan, 2 = belakang), arah s
 
 - `engine.js`: mesin pola. Isinya geometri, kampuh otomatis, dan rumus tiap model (`MODELS`).
 - `pdf.js`: susunan potongan, export PDF plotter dan A4 (jsPDF), dan preview SVG.
+- `fsmodels.js`: adaptor FreeSewing yang mengubah size chart ke ukuran badan, menyetel ulang ukuran, lalu mengubah potongan FreeSewing ke format Pattern Maker.
+- `lib/freesewing.js`: bundle FreeSewing v4.10.2 (MIT, lihat `lib/FREESEWING-LICENSE.txt`).
+- `tools/test-fs.js`: cek target vs hasil semua model FreeSewing (`node tools/test-fs.js`).
 - `importer.js`: membaca size chart dari Excel/CSV/OCR dan menebak model.
 - `app.js`, `index.html`: tampilan aplikasi. Library SheetJS, Tesseract.js (OCR), dan pdf.js baru dimuat dari CDN saat ada file yang di-upload.
 - `lib/jspdf.umd.min.js`: jsPDF 2.5.1 (MIT).

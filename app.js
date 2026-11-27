@@ -24,13 +24,19 @@
   const save = () => store.set("pola:" + modelId, state);
 
   function renderModels() {
+    const groups = [["Pola FreeSewing (sudah teruji)", (M) => M.source === "FreeSewing"], ["Pola Pattern Maker", (M) => M.source !== "FreeSewing"]];
     $("models").innerHTML = "";
-    for (const [id, M] of Object.entries(MODELS)) {
-      const b = document.createElement("button");
-      b.textContent = M.name; b.className = id === modelId ? "on" : "";
-      b.onclick = () => { modelId = id; store.set("pola:model", id); state = load(id); renderAll(); };
-      $("models").appendChild(b);
-      if (id === modelId) requestAnimationFrame(() => { $("models").scrollLeft = Math.max(0, b.offsetLeft - $("models").offsetLeft - 16); });
+    for (const [title, test] of groups) {
+      const h = document.createElement("div"); h.className = "grp"; h.textContent = title; $("models").appendChild(h);
+      const row = document.createElement("div"); row.className = "pills"; $("models").appendChild(row);
+      for (const [id, M] of Object.entries(MODELS)) {
+        if (!test(M)) continue;
+        const b = document.createElement("button");
+        b.textContent = M.name.replace(/ \(FreeSewing (\w+)\)/, " · $1"); b.className = id === modelId ? "on" : "";
+        b.onclick = () => { modelId = id; store.set("pola:model", id); state = load(id); renderAll(); };
+        row.appendChild(b);
+        if (id === modelId) requestAnimationFrame(() => { row.scrollLeft = Math.max(0, b.offsetLeft - row.offsetLeft - 16); });
+      }
     }
     $("desc").textContent = MODELS[modelId].desc;
   }
@@ -70,7 +76,14 @@
     }));
   }
 
+  let lastRun = null, upTimer = null;
   function update() {
+    clearTimeout(upTimer);
+    $("checks").style.opacity = $("preview").style.opacity = 0.4;
+    upTimer = setTimeout(updateNow, 30);
+  }
+  function updateNow() {
+    $("checks").style.opacity = $("preview").style.opacity = 1;
     const M = MODELS[modelId];
     $("err").textContent = "";
     const sizes = Object.keys(state.chart);
@@ -78,8 +91,9 @@
     sel.innerHTML = `<option value="">Semua size (bertumpuk)</option>` + sizes.map((s) => `<option ${s === cur ? "selected" : ""}>${s}</option>`).join("");
     $("legend").innerHTML = sizes.map((s, i) => `<span style="--c:${P.COLORS[i % P.COLORS.length]}">${s}</span>`).join("");
     try {
-      $("preview").innerHTML = P.previewSVG(M, state.chart, state.params, { width: 150, size: sel.value || null });
       const run = P.runModel(M, state.chart, state.params);
+      lastRun = { run, key: JSON.stringify([modelId, state]) };
+      $("preview").innerHTML = P.previewSVG(M, state.chart, state.params, { width: 150, size: sel.value || null, run });
       const rows = run.results[sizes[0]].checks.map((c, i) => `<tr><td>${c[0]}</td>` + sizes.map((s) => `<td>${run.results[s].checks[i][1]}</td>`).join("") + "</tr>");
       $("checks").innerHTML = "<tr><th>Ukuran</th>" + sizes.map((s, i) => `<th style="color:${P.COLORS[i % P.COLORS.length]}">${s}</th>`).join("") + "</tr>" + rows.join("");
       $("dlPlot").disabled = $("dlA4").disabled = false;
@@ -106,13 +120,14 @@
     if (!confirm("Kembalikan size chart & pengaturan ke contoh awal?")) return;
     store.set("pola:" + modelId, null); state = load(modelId); renderAll();
   };
+  const runFor = () => (lastRun && lastRun.key === JSON.stringify([modelId, state]) ? lastRun.run : undefined);
   const fname = (kind) => `Pola_${MODELS[modelId].name.replace(/\s+/g, "_")}_${Object.keys(state.chart).join("-")}_${kind}.pdf`;
   $("dlPlot").onclick = () => {
-    try { P.plotterPDF(MODELS[modelId], state.chart, state.params, parseFloat($("plotW").value), { refs }).doc.save(fname("PLOTTER")); }
+    try { P.plotterPDF(MODELS[modelId], state.chart, state.params, parseFloat($("plotW").value), { refs, run: runFor() }).doc.save(fname("PLOTTER")); }
     catch (e) { $("err").textContent = "Gagal membuat PDF: " + e.message; }
   };
   $("dlA4").onclick = () => {
-    try { P.a4PDF(MODELS[modelId], state.chart, state.params, { refs }).doc.save(fname("A4")); }
+    try { P.a4PDF(MODELS[modelId], state.chart, state.params, { refs, run: runFor() }).doc.save(fname("A4")); }
     catch (e) { $("err").textContent = "Gagal membuat PDF: " + e.message; }
   };
 

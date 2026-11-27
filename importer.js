@@ -22,12 +22,17 @@
 
   const MODEL_WORDS = [
     ["coach", ["coach jacket", "coach", "jaket coach", "windbreaker"]],
-    ["kemeja", ["kemeja", "shirt lengan panjang", "button up", "button-up", "long sleeve shirt", "flannel", "flanel"]],
-    ["kaos", ["kaos", "t-shirt", "tshirt", "t shirt", "tee", "oblong", "jersey"]],
-    ["celana", ["celana", "pants", "trouser", "jogger", "kulot", "chino", "sweatpants", "cargo"]],
-    ["rok", ["rok", "skirt"]],
+    ["fs_hugo", ["hoodie", "hoody", "jaket hoodie", "sweater hoodie"]],
+    ["fs_sven", ["sweatshirt", "crewneck", "crew neck", "sweater"]],
+    ["fs_simon", ["kemeja", "shirt lengan panjang", "button up", "button-up", "long sleeve shirt", "flannel", "flanel"]],
+    ["fs_teagan", ["kaos", "t-shirt", "tshirt", "t shirt", "tee", "oblong", "jersey"]],
+    ["fs_charlie", ["chino", "chinos", "celana bahan", "trouser", "trousers", "slack"]],
+    ["fs_paco", ["celana karet", "jogger", "kulot", "sweatpants", "celana", "pants", "cargo"]],
+    ["fs_penelope", ["rok pensil", "pencil skirt", "rok span", "rok spam"]],
+    ["fs_sandy", ["rok lingkar", "rok payung", "circle skirt", "rok mekar"]],
+    ["rok", ["rok a", "a-line", "a line", "rok", "skirt"]],
     ["coach", ["jacket", "jaket"]],
-    ["kemeja", ["shirt"]],
+    ["fs_simon", ["shirt"]],
   ];
 
   function norm(s) { return String(s == null ? "" : s).replace(/\s+/g, " ").trim(); }
@@ -84,7 +89,8 @@
     // A) sizes across a header row, measurements down
     for (let r = 0; r < grid.length; r++) {
       const cols = [];
-      grid[r].forEach((c, j) => { if (isSize(c)) cols.push(j); });
+      const numHdr = /^(size|sizes|ukuran|uk|no)$/i.test(grid[r][0] || "");
+      grid[r].forEach((c, j) => { if (isSize(c) || (numHdr && j > 0 && /^(2[4-9]|3\d|4[0-8])$/.test(c))) cols.push(j); });
       if (cols.length >= 1 && (cols.length >= 2 || grid[r].length <= 3)) {
         const rows = [];
         for (let k = r + 1; k < grid.length; k++) {
@@ -121,7 +127,8 @@
     // A) a line holding the sizes, then "LABEL v v v" lines
     for (let i = 0; i < lines.length; i++) {
       const toks = lines[i].split(" ");
-      const sz = toks.filter(isSize);
+      const numHdr = /^(size|sizes|ukuran|uk|no)\b/i.test(toks[0] || "");
+      const sz = toks.filter((t) => isSize(t) || (numHdr && /^(2[4-9]|3\d|4[0-8])$/.test(t)));
       if (sz.length >= 2 && sz.length >= toks.length - 2) {
         const sizes = sz.map(sizeName), rows = [];
         for (let k = i + 1; k < lines.length; k++) {
@@ -165,9 +172,9 @@
     for (const [id, words] of MODEL_WORDS) for (const w of words) if (models[id] && s.includes(" " + w + " ")) return { id, why: `ada tulisan "${w}"` };
     if (table) {
       const ks = new Set(table.rows.flatMap((r) => r.lab.keys.slice(0, 1)));
-      if (ks.has("rise") || ks.has("thigh")) return { id: "celana", why: "ada ukuran pesak/paha" };
+      if (ks.has("rise") || ks.has("thigh")) return { id: models.fs_paco ? "fs_paco" : "celana", why: "ada ukuran pesak/paha" };
       if (ks.has("waist") && ks.has("hip")) return { id: "rok", why: "ada ukuran pinggang & pinggul" };
-      if (ks.has("cuff")) return { id: "kemeja", why: "ada ukuran manset" };
+      if (ks.has("cuff")) return { id: models.fs_simon ? "fs_simon" : "kemeja", why: "ada ukuran manset" };
       if (ks.has("chest") && ks.has("sleeve")) return null;
     }
     return null;

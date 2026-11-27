@@ -165,7 +165,7 @@
 
   // ---------- PLOTTER ----------
   function plotterPDF(model, chart, params, width = 150, opts = {}) {
-    const run = runModel(model, chart, params);
+    const run = opts.run || runModel(model, chart, params);
     const lay = layout(run, width - 6);
     const lines = infoLines(model, chart);
     const ref = (opts.refs || [])[0];
@@ -191,7 +191,7 @@
   // ---------- A4 ----------
   const A4W = 21, A4H = 29.7, MG = 1, TW = A4W - 2 * MG, TH = A4H - 2 * MG;
   function a4PDF(model, chart, params, opts = {}) {
-    const run = runModel(model, chart, params);
+    const run = opts.run || runModel(model, chart, params);
     const LW = TW * 6 - 4;
     const lay = layout(run, LW);
     const cols = Math.ceil((lay.W + 2) / TW), rows = Math.ceil((lay.H + 2) / TH);
@@ -327,7 +327,7 @@
 
   // ---------- SVG preview (one size or all) ----------
   function previewSVG(model, chart, params, opts = {}) {
-    const run = runModel(model, chart, params);
+    const run = opts.run || runModel(model, chart, params);
     const lay = layout(run, opts.width || 150);
     const only = opts.size;
     const W = lay.W, H = lay.H, out = [];
