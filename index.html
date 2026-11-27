@@ -58,6 +58,10 @@
   .bar { height:6px; background:var(--line); border-radius:9px; overflow:hidden; margin-top:8px; }
   .bar i { display:block; height:100%; width:0; background:var(--acc); transition:width .2s; }
   .gen { text-align:center; }
+  textarea { width:100%; padding:9px; border:1px solid var(--line); border-radius:10px; font:inherit; font-size:15px; }
+  td.bad { color:#c62828; font-weight:700; }
+  td.good { color:#2e7d32; }
+  .tolsum { font-size:13px; margin:0 0 8px; }
   .btn.big { font-size:17px; padding:14px 26px; width:100%; max-width:420px; min-height:52px; }
   .restitle { font-size:20px !important; text-transform:none !important; letter-spacing:0 !important; color:var(--ink) !important; margin:12px 0 4px !important; }
   .row.top { margin-top:0; }
@@ -104,6 +108,20 @@
     <div class="params" id="params"></div>
   </section>
 
+  <section class="card wide">
+    <h2>4. Toleransi, susut bahan & catatan</h2>
+    <div class="params">
+      <div><label>Toleransi kurang (cm)</label><input type="number" step="0.5" id="tolMinus"></div>
+      <div><label>Toleransi lebih (cm)</label><input type="number" step="0.5" id="tolPlus"></div>
+      <div><label>Buat pola lebih besar (cm)</label><input type="number" step="0.5" id="aim"></div>
+      <div><label>Susut bahan panjang (%)</label><input type="number" step="0.5" id="shrinkL"></div>
+      <div><label>Susut bahan lebar (%)</label><input type="number" step="0.5" id="shrinkW"></div>
+    </div>
+    <label class="note" for="notes" style="display:block;margin-top:10px">Catatan untuk penjahit (ikut tercetak di PDF)</label>
+    <textarea id="notes" rows="4" placeholder="mis. Rib kerah 2,5 cm; sambungan rib di tengah belakang"></textarea>
+    <p class="note">Susut bahan: isi dari hasil tes cuci bahan (ukur kain 50×50 cm, cuci & keringkan, hitung % menyusut). Pola otomatis diperbesar sesuai susut.</p>
+  </section>
+
   <section class="card wide gen">
     <button class="btn solid big" id="generate">Generate Pola →</button>
     <p class="err" id="err"></p>
@@ -137,7 +155,10 @@
 
   <section class="card wide">
     <h2>Cek ukuran pola</h2>
+    <p class="tolsum" id="tolSum"></p>
     <div class="tablewrap"><table id="checks"></table></div>
+    <p class="note">Format: target dari tabel / hasil pola (cm, flat, setelah susut). Hijau = masuk toleransi, merah = di luar toleransi.</p>
+    <div id="specBox"></div>
   </section>
 
   <section class="card wide">

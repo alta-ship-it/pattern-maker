@@ -275,6 +275,80 @@
     },
   };
 
+  // ===== KAOS OVERSIZE (drop shoulder) =====
+  MODELS.kaos_os = {
+    name: "Kaos Oversize (drop shoulder)",
+    desc: "Kaos oversize bahu turun, leher O dengan rib (sambungan rib di belakang tengah), badan cut on fold.",
+    fields: [
+      { k: "chest", label: "Lebar dada" }, { k: "length", label: "Panjang badan" },
+      { k: "sleeve", label: "Panjang tangan" }, { k: "shoulder", label: "Pundak/Bahu" },
+      { k: "opening", label: "Lebar lengan" },
+    ],
+    chart: {
+      S: { chest: 56, length: 70, sleeve: 23, shoulder: 46, opening: 20 },
+      M: { chest: 58, length: 72, sleeve: 23, shoulder: 48, opening: 20 },
+      L: { chest: 60, length: 74, sleeve: 24, shoulder: 50, opening: 21 },
+      XL: { chest: 62, length: 76, sleeve: 24, shoulder: 52, opening: 21 },
+      "2XL": { chest: 64, length: 78, sleeve: 25, shoulder: 54, opening: 22 },
+    },
+    params: [
+      { k: "sa", label: "Kampuh", def: 1 }, { k: "hem", label: "Kelim bawah & lengan", def: 2.5 },
+      { k: "neckW", label: "Lebar kerung leher (jahitan ke jahitan)", def: 18 }, { k: "fnd", label: "Turun leher depan", def: 9 },
+      { k: "bnd", label: "Turun leher belakang", def: 2.5 }, { k: "rib", label: "Lebar rib kerah jadi", def: 2.5 },
+      { k: "ribPct", label: "Panjang rib (% lingkar leher)", def: 85, unit: "%" },
+    ],
+    draft(m, p) {
+      const C = m.chest, L = m.length, S = m.shoulder, sa = p.sa, hem = p.hem;
+      const nw = p.neckW / 2, bnd = p.bnd, fnd = p.fnd, slope = 3.0;
+      const AH = Math.max(0.42 * C + 2.5, fnd + 8);
+      const c = bodiceCurves({ nw, bnd, fnd, slope, S, C, AH });
+      const fr = new Piece({
+        name: "BADAN DEPAN", cut: "Potong 1 lipat",
+        edges: [[line([0, -L], [C / 2, -L]), hem], [line([C / 2, -L], c.ua), sa], [rev(c.frontAH), sa], [line(c.sp, c.hps), sa], [c.frontNeck, sa], [line([0, -fnd], [0, -L]), 0]],
+        grain: [[C / 5, -AH - 6], [C / 5, -L + 8]], label: [C / 5 + 1.5, -AH - 10], fold: [[0, -fnd], [0, -L]],
+      });
+      fr.notch(pointAt(rev(c.frontAH), 8), 1).notch([0, -fnd], 1);
+      const bk = new Piece({
+        name: "BADAN BELAKANG", cut: "Potong 1 lipat",
+        edges: [[line([0, -L], [C / 2, -L]), hem], [line([C / 2, -L], c.ua), sa], [rev(c.backAH), sa], [line(c.sp, c.hps), sa], [rev(c.backNeck), sa], [line([0, -bnd], [0, -L]), 0]],
+        grain: [[C / 5, -AH - 6], [C / 5, -L + 8]], label: [C / 5 + 1.5, -AH - 10], fold: [[0, -bnd], [0, -L]],
+      });
+      bk.notch(pointAt(rev(c.backAH), 9), 2).notch([0, -bnd], 1);
+      bk.marks.push({ t: "text", p: [0.6, -bnd - 1.6], s: "sambungan rib di sini (tengah belakang)" });
+      const ah = bodyAH(c);
+      const sl = sleeveDraft({ fAH: ah.f, bAH: ah.b, ease: 0.5, capH: 0.15 * (ah.f + ah.b), SL: m.sleeve, cuff: m.opening, name: "LENGAN", cut: "Potong 2", sa, hem });
+      const bnl = plen(c.backNeck), fnl = plen(c.frontNeck), neckFull = 2 * (bnl + fnl);
+      const ribL = r1(neckFull * p.ribPct / 100), ribH = 2 * p.rib;
+      const rib = new Piece({
+        name: "RIB KERAH", cut: "Potong 1 (bahan rib, serat melintang)",
+        edges: [[line([0, 0], [ribL, 0]), sa], [line([ribL, 0], [ribL, ribH]), sa], [line([ribL, ribH], [0, ribH]), sa], [line([0, ribH], [0, 0]), sa]],
+        grain: [[ribL * 0.62, 0.8], [ribL * 0.9, 0.8]], label: [2.5, ribH * 0.66],
+      });
+      const sh = (ribL / 2) * bnl / (bnl + fnl);
+      rib.notch([sh, 0]).notch([ribL / 2, 0]).notch([ribL - sh, 0]);
+      rib.marks.push({ t: "line", pts: line([0, ribH / 2], [ribL, ribH / 2]), s: "lipat" });
+      rib.marks.push({ t: "text", p: [0.4, ribH * 0.2], s: "← ujung = sambungan TENGAH BELAKANG" });
+      rib.marks.push({ t: "text", p: [ribL / 2 - 1.2, ribH * 0.2], s: "tengah depan" });
+      rib.marks.push({ t: "text", p: [sh - 1, ribH * 0.2], s: "bahu" }, { t: "text", p: [ribL - sh - 1, ribH * 0.2], s: "bahu" });
+      // measured results (finished, flat)
+      const chestR = 2 * Math.max(...fr.net.filter((q) => Math.abs(q[1] + AH) < 0.6).map((q) => q[0]));
+      const lenR = -Math.min(...bk.net.map((q) => q[1]));
+      const slR = Math.max(...sl.piece.net.map((q) => q[1])) - Math.min(...sl.piece.net.map((q) => q[1]));
+      const hemPts = sl.piece.net.filter((q) => Math.abs(q[1] - sl.yH) < 0.01);
+      const openR = (Math.max(...hemPts.map((q) => q[0])) - Math.min(...hemPts.map((q) => q[0]))) / 2;
+      return {
+        pieces: { front: fr, back: bk, sleeve: sl.piece, rib },
+        checks: [
+          ["Lebar dada", null, C, r1(chestR)], ["Panjang badan", null, L, r1(lenR)], ["Panjang tangan", null, m.sleeve, r1(slR)],
+          ["Pundak/Bahu", null, S, r1(2 * c.sp[0])], ["Lebar lengan", null, m.opening, r1(openR)],
+          ["Lebar kerung leher", null, p.neckW, r1(2 * nw)],
+          ["Lebar lengan atas (flat)", r1(sl.B / 2)], ["Kerung lengan vs puncak lengan", `${r1(ah.f + ah.b)} / ${r1(sl.capF + sl.capB)}`],
+          ["Lingkar leher / panjang rib", `${r1(neckFull)} / ${ribL}`],
+        ],
+      };
+    },
+  };
+
   // ===== KEMEJA =====
   MODELS.kemeja = {
     name: "Kemeja Lengan Panjang",

@@ -7,12 +7,47 @@
   const hex = (h) => [parseInt(h.slice(1, 3), 16), parseInt(h.slice(3, 5), 16), parseInt(h.slice(5, 7), 16)];
 
   // run all sizes of a model: returns {sizes, results:{size:{pieces,checks}}, keys}
-  function runModel(model, chart, params) {
+  // opts: {aim (cm added to every chart value), tolMinus, tolPlus (client tolerance), shrinkL, shrinkW (% fabric shrinkage), notes}
+  function runModel(model, chart, params, opts = {}) {
+    const aim = +opts.aim || 0, tm = opts.tolMinus != null ? +opts.tolMinus : 0, tp = opts.tolPlus != null ? +opts.tolPlus : 1;
+    const fx = 1 / (1 - (+opts.shrinkW || 0) / 100), fy = 1 / (1 - (+opts.shrinkL || 0) / 100);
     const sizes = Object.keys(chart);
     const results = {};
-    for (const s of sizes) results[s] = model.draft(chart[s], params);
+    for (const s of sizes) {
+      const row = {};
+      for (const k of Object.keys(chart[s])) row[k] = chart[s][k] + aim;
+      const r = model.draft(row, params);
+      // checks -> {label, text, ok}
+      r.checks = r.checks.map((c) => {
+        if (c[2] == null || c[3] == null) return { label: c[0], text: String(c[1] != null ? c[1] : "-"), ok: null };
+        const target = Math.round((c[2] - (model.fields.some((f) => f.label === c[0]) ? aim : 0)) * 10) / 10;
+        const res = c[3];
+        const ok = res >= target - tm - 0.05 && res <= target + tp + 0.05;
+        return { label: c[0], text: `${target} / ${res}`, ok, target, res };
+      });
+      if (fx !== 1 || fy !== 1) for (const k of Object.keys(r.pieces)) r.pieces[k] = scalePiece(r.pieces[k], fx, fy);
+      results[s] = r;
+    }
     const keys = Object.keys(results[sizes[0]].pieces);
-    return { sizes, results, keys };
+    return { sizes, results, keys, opts: { aim, tolMinus: tm, tolPlus: tp, shrinkL: +opts.shrinkL || 0, shrinkW: +opts.shrinkW || 0, notes: opts.notes || "" } };
+  }
+  function scalePiece(pc, fx, fy) {
+    const S = (q) => [q[0] * fx, q[1] * fy];
+    const o = Object.create(Object.getPrototypeOf(pc));
+    Object.assign(o, pc, {
+      net: pc.net.map(S), cutLine: pc.cutLine.map(S), align: S(pc.align), grain: pc.grain.map(S), label: S(pc.label),
+      fold: pc.fold ? pc.fold.map(S) : null,
+      notches: pc.notches.map((n) => Object.assign({}, n, { p: S(n.p) })),
+      marks: pc.marks.map((m) => Object.assign({}, m, m.p ? { p: S(m.p) } : {}, m.pts ? { pts: m.pts.map(S) } : {}, m.a ? { a: S(m.a), b: S(m.b) } : {})),
+    });
+    return o;
+  }
+  function specLines(run, params) {
+    const o = run.opts || {}, out = [];
+    out.push(`Toleransi client: -${o.tolMinus} / +${o.tolPlus} cm` + (o.aim ? `. Pola dibuat +${o.aim} cm dari tabel.` : "."));
+    if (o.shrinkL || o.shrinkW) out.push(`Pola sudah ditambah susut bahan: panjang ${o.shrinkL}%, lebar ${o.shrinkW}%.`);
+    for (const l of String(o.notes || "").split(/\n+/)) if (l.trim()) out.push("• " + l.trim());
+    return out;
   }
 
   function pieceBBox(run, key) {
@@ -167,7 +202,7 @@
   function plotterPDF(model, chart, params, width = 150, opts = {}) {
     const run = opts.run || runModel(model, chart, params);
     const lay = layout(run, width - 6);
-    const lines = infoLines(model, chart);
+    const lines = infoLines(model, chart).concat(specLines(run, params));
     const ref = (opts.refs || [])[0];
     const infoH = Math.max(4 + lines.length * 0.7, ref ? 14 : 0);
     const W = width, H = lay.H + 6 + infoH;
@@ -243,7 +278,7 @@
     t(1.5, 3.2, `Size ${run.sizes.join(" - ")}  |  semua size bertumpuk (nested)`, 11);
     let y = 4.4;
     t(1.5, y, "CARA CETAK", 12, true); y += 0.6;
-    ["1. Print ukuran asli: 100% / 'Actual size' (JANGAN 'Fit to page').", "2. Ukur KOTAK UJI 5x5 cm (kanan bawah). Kalau meleset, cek setting printer.",
+    ["1. Print ukuran asli: 100% / 'Actual size' (JANGAN 'Fit to page').", "2. Ukur KOTAK UJI 5x5 cm (ada di halaman pola). Kalau meleset, cek setting printer.",
       "3. Potong tepi kertas, sambung sesuai kode A1, A2, B1... (lihat halaman PETA).", "   Tepatkan bulatan di tiap tepi kertas, lalu selotip.", "4. Untuk konveksi lebih praktis pakai file PLOTTER (skala 1:1)."]
       .forEach((l) => { t(1.5, y, l, 9); y += 0.5; });
     y += 0.4; t(1.5, y, "UKURAN JADI (flat), cm", 12, true); y += 0.65;
@@ -262,16 +297,19 @@
     y += 0.4; t(1.5, y, "CEK UKURAN POLA", 12, true); y += 0.6;
     const checks = run.sizes.map((s) => run.results[s].checks);
     checks[0].forEach((c, i) => {
-      t(1.5, y, c[0], 8, true);
-      run.sizes.forEach((s, j) => t(8.2 + j * 2.5, y, checks[j][i][1], 8, false, COLORS[j % COLORS.length]));
+      t(1.5, y, c.label, 8, true);
+      run.sizes.forEach((s, j) => { const k = checks[j][i]; t(8.2 + j * 2.5, y, k.text + (k.ok === false ? " !" : ""), 8, k.ok === false, k.ok === false ? "#c62828" : COLORS[j % COLORS.length]); });
       y += 0.42;
     });
+    y += 0.4; t(1.5, y, "SPESIFIKASI & CATATAN PENJAHIT", 12, true); y += 0.6;
+    for (const l of specLines(run, params)) {
+      doc.setFont("helvetica", "normal"); doc.setFontSize(8.5);
+      for (const w of doc.splitTextToSize(l, 18)) { t(1.5, y, w, 8.5); y += 0.42; }
+    }
     y += 0.4; t(1.5, y, "KETERANGAN", 12, true); y += 0.6;
     [`- Kampuh ${params.sa} cm${params.hem ? `, kelim ${params.hem} cm` : ""} sudah termasuk. Garis putus tipis = garis jahit.`,
       "- Garis tebal = garis potong (warna & pola garis beda per size).", "- Takik: 1 garis = depan, 2 garis = belakang.",
       `- ${model.desc}`, "- WAJIB jahit sampel 1 size dulu sebelum produksi massal."].forEach((l) => { t(1.5, y, l, 8); y += 0.45; });
-    const pen = makePen(doc, A4H, 0, 0);
-    drawTest(doc, pen, [13, 0.6]);
   }
 
   function refPage(doc, refs) {

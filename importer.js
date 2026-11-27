@@ -22,6 +22,7 @@
 
   const MODEL_WORDS = [
     ["coach", ["coach jacket", "coach", "jaket coach", "windbreaker"]],
+    ["kaos_os", ["oversized t-shirt", "oversize t-shirt", "oversized tee", "oversize tee", "oversized", "oversize", "drop shoulder", "boxy"]],
     ["fs_hugo", ["hoodie", "hoody", "jaket hoodie", "sweater hoodie"]],
     ["fs_sven", ["sweatshirt", "crewneck", "crew neck", "sweater"]],
     ["fs_simon", ["kemeja", "shirt lengan panjang", "button up", "button-up", "long sleeve shirt", "flannel", "flanel"]],
@@ -53,8 +54,10 @@
     const v = parseFloat(t);
     return isFinite(v) ? v : null;
   }
-  const isSize = (t) => SIZE_RE.test(norm(t).replace(/\s+/g, " "));
-  const sizeName = (t) => norm(t).toUpperCase().replace(/\s+/g, "");
+  const FUZZY = { SS: "S", XT: "XL", "2XT": "2XL", "3XT": "3XL", XI: "XL", "2XI": "2XL", X1: "XL", "2X1": "2XL", XXT: "XXL", IL: "L", "2X": "2XL", "3X": "3XL" };
+  const fixSize = (t) => { const u = norm(t).toUpperCase().replace(/[^A-Z0-9 ]/g, ""); return FUZZY[u] || u; };
+  const isSize = (t) => SIZE_RE.test(fixSize(t));
+  const sizeName = (t) => fixSize(t).replace(/\s+/g, "");
 
   // find a measurement label inside text -> {keys, word, pos}
   function matchLabel(text) {
@@ -62,7 +65,8 @@
     let best = null;
     for (const e of SYN) for (const w of e.words) {
       const i = s.indexOf(" " + w + " ");
-      if (i >= 0 && (!best || w.length > best.word.length)) best = { keys: e.keys, word: w, pos: i };
+      const j = s.lastIndexOf(" " + w + " ");
+      if (i >= 0 && (!best || j + w.length > best.end || (j + w.length === best.end && w.length > best.word.length))) best = { keys: e.keys, word: w, pos: j, end: j + w.length };
     }
     return best;
   }
@@ -133,13 +137,25 @@
     const out = LADDER.slice(i, i + n).map((x) => (use2 && LADDER2[x] ? LADDER2[x] : x));
     return out.length === n ? out : sizes;
   }
+  // "2 1" -> 21 when OCR splits a number; only when the row has too many values
+  function mergeSplit(vals, n) {
+    let v = vals.slice();
+    while (v.length > n) {
+      const i = v.findIndex((x, k) => k < v.length - 1 && x != null && v[k + 1] != null && x < 10 && v[k + 1] < 10 && Number.isInteger(x) && Number.isInteger(v[k + 1]));
+      if (i < 0) break;
+      v.splice(i, 2, v[i] * 10 + v[i + 1]);
+    }
+    return v;
+  }
   const UNIT_WORDS = /^(size|sizes|ukuran|uk|cm|em|crn|inch|in|:|-|—|tabel|chart)$/i;
 
   function parseText(text) {
     const lines = String(text).split(/\r?\n/).map((l) => norm(l.replace(/[|[\]{}()“”"_=:;]/g, " "))).filter(Boolean);
     // A) a line holding the sizes, then "LABEL v v v" lines
     for (let i = 0; i < lines.length; i++) {
-      const toks = lines[i].split(" ");
+      let toks = lines[i].split(" ");
+      const hi = toks.findIndex((t) => /^(size|sizes|ukuran)$/i.test(t));
+      if (hi > 0) toks = toks.slice(hi); // drawing labels etc. to the left of the table
       const numHdr = /^(size|sizes|ukuran|uk|no)\b/i.test(toks[0] || "");
       const sz = toks.filter((t) => isSize(t) || (numHdr && /^(2[4-9]|3\d|4[0-8])$/.test(t)));
       const other = toks.filter((t) => !isSize(t) && !UNIT_WORDS.test(t) && !(numHdr && /^\d+$/.test(t)));
@@ -162,7 +178,7 @@
           const counts = rows.map((r) => r.values.length).sort((a, b) => a - b);
           const n = counts[Math.floor(counts.length / 2)];
           if (n > sizes.length) sizes = extendSizes(sizes, n);
-          for (const r of rows) { r.values = r.values.slice(-sizes.length); while (r.values.length < sizes.length) r.values.unshift(null); }
+          for (const r of rows) { r.values = mergeSplit(r.values, sizes.length).slice(-sizes.length); while (r.values.length < sizes.length) r.values.unshift(null); }
           return { sizes, rows };
         }
       }
@@ -180,6 +196,7 @@
       if (rows.length >= 2) {
         const counts = rows.map((r) => r.values.length).sort((a, b) => a - b);
         const n = counts[Math.floor(counts.length / 2)];
+        rows.forEach((r) => (r.values = mergeSplit(r.values, n)));
         const good = rows.filter((r) => r.values.length === n);
         if (good.length >= 2) return { sizes: extendSizes(["S"], n), rows: good, guessedSizes: true };
       }
@@ -319,5 +336,35 @@
     return inch > cm ? "inch" : "cm";
   }
 
-  root.PolaImport = { parseGrid, parseText, guessModel, toChart, detectUnit, num, isSize };
+  // client specs written as text (guidelines / tech packs)
+  const SPEC_WORDS = /\b(rib|kerah|leher|kerung|jahit|jahitan|sambung|toleransi|label|sablon|print|bordir|bahan|kain|gramasi|warna|kancing|kampuh|kelim|obras|overdeck|tag|hangtag|packing)/i;
+  function extractSpecs(texts) {
+    const all = (Array.isArray(texts) ? texts : [texts]).join("\n");
+    // join wrapped lines into sentences
+    const lines = all.split(/\r?\n/).map((l) => norm(l)).filter(Boolean);
+    const paras = [];
+    for (const l of lines) {
+      const prev = paras[paras.length - 1];
+      if (prev && !/[.!:)]$/.test(prev) && /^[a-z(]/.test(l)) paras[paras.length - 1] = prev + " " + l;
+      else paras.push(l);
+    }
+    const notes = [];
+    for (const p of paras) {
+      if (!SPEC_WORDS.test(p) || p.length < 12 || p.length > 220) continue;
+      if (/\d+\s+\d+\s+\d+/.test(p)) continue; // table rows
+      const clean = p.replace(/^[*•|\-\s]+/, "").replace(/\s+/g, " ");
+      if (!notes.some((n) => n.toLowerCase() === clean.toLowerCase())) notes.push(clean);
+    }
+    const n = (x) => parseFloat(String(x).replace(",", "."));
+    const out = { notes: notes.slice(0, 10) };
+    let m = all.match(/rib[^.\n]{0,40}?(\d+(?:[.,]\d+)?)\s*cm/i); if (m) out.rib = n(m[1]);
+    m = all.match(/(?:kerung(?:an)?|lubang|lebar)\s+leher[^.\n\d]{0,30}(\d+(?:[.,]\d+)?)\s*cm/i) || all.match(/neck\s*(?:width|opening)[^\d]{0,20}(\d+(?:[.,]\d+)?)/i);
+    if (m) out.neckW = n(m[1]);
+    m = all.match(/toleransi[^.\n]{0,60}?(?:maks(?:imal)?|max(?:imum)?|\+)\s*(\d+(?:[.,]\d+)?)\s*cm/i); if (m) out.tolPlus = n(m[1]);
+    if (/tidak\s+boleh\s+kurang|no\s+smaller|tidak\s+boleh\s+lebih\s+kecil/i.test(all)) out.tolMinus = 0;
+    else { m = all.match(/toleransi[^.\n]{0,40}?[±+\-]\s*(\d+(?:[.,]\d+)?)\s*cm/i); if (m) { out.tolMinus = n(m[1]); out.tolPlus = out.tolPlus || n(m[1]); } }
+    return out;
+  }
+
+  root.PolaImport = { extractSpecs, parseGrid, parseText, guessModel, toChart, detectUnit, num, isSize };
 })(typeof window !== "undefined" ? window : globalThis);

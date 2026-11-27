@@ -41,6 +41,7 @@ Pola-pola ini memakai desain dari [FreeSewing](https://freesewing.eu) (lisensi M
 
 | Model | Potongan |
 |---|---|
+| Kaos Oversize (drop shoulder) | badan depan, badan belakang, lengan, rib kerah (tanda sambungan di tengah belakang); lebar kerung leher & rib bisa diatur |
 | Kaos Oblong | badan depan, badan belakang, lengan, rib leher |
 | Kemeja Lengan Panjang | badan depan (plaket lipat), badan belakang (lipit), yoke, lengan, kerah, kaki kerah, manset, plaket belahan, kantong dada |
 | Coach Jacket | badan depan, badan belakang, yoke, lengan, kerah, facing, kantong dada, bis kantong, kantong dalam |
@@ -48,6 +49,13 @@ Pola-pola ini memakai desain dari [FreeSewing](https://freesewing.eu) (lisensi M
 | Rok A-Line | rok depan, rok belakang, ban pinggang |
 
 Semua pola sudah termasuk kampuh, kelim, takik (1 = depan, 2 = belakang), arah serat, tanda lipat kain, dan posisi kancing atau kantong.
+
+## Toleransi, susut bahan & catatan penjahit
+
+- **Toleransi client** (misalnya −0 / +1 cm): tabel cek ukuran menandai hijau kalau ukuran masuk toleransi dan merah kalau di luar toleransi.
+- **Buat pola lebih besar**: semua ukuran ditambah sekian cm supaya aman, misalnya +0,5 cm kalau client tidak mau ukuran kurang.
+- **Susut bahan (%)**: pola diperbesar sesuai susut panjang dan lebar dari hasil tes cuci.
+- **Catatan penjahit**: ikut tercetak di PDF. Saat file client di-upload, catatan seperti rib, leher, jahitan, dan toleransi diambil otomatis dari guideline.
 
 ## Cara pakai
 

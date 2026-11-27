@@ -257,7 +257,7 @@
         const D = FS[def.design];
         const { pat, got } = def.kind === "top" ? fitTop(D, row, p, def) : fitBottom(D, row, p, def);
         const pieces = toPieces(pat);
-        const checks = def.fields.map((f) => [f.label + " (target / hasil)", got[f.k] != null ? `${row[f.k]} / ${r1(got[f.k] / 10)}` : `${row[f.k]} / -`]);
+        const checks = def.fields.map((f) => [f.label, "-", row[f.k], got[f.k] != null ? r1(got[f.k] / 10) : null]);
         return { pieces, checks };
       },
     };

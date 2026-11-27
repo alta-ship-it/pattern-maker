@@ -11,6 +11,8 @@
     set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) { /* ignore */ } },
   };
 
+  const G = Object.assign({ tolMinus: 0, tolPlus: 1, aim: 0, shrinkL: 0, shrinkW: 0 }, store.get("pola:global") || {});
+  const saveG = () => store.set("pola:global", G);
   let modelId = store.get("pola:model") || "coach";
   if (!MODELS[modelId]) modelId = "coach";
   let state = load(modelId);
@@ -91,7 +93,17 @@
     sel.innerHTML = `<option value="">Semua size (bertumpuk)</option>` + sizes.map((s) => `<option ${s === cur ? "selected" : ""}>${esc(s)}</option>`).join("");
     $("legend").innerHTML = sizes.map((s, i) => `<span style="--c:${P.COLORS[i % P.COLORS.length]}">${esc(s)}</span>`).join("");
     $("preview").innerHTML = P.previewSVG(model, lastRun.chart, lastRun.params, { width: 150, size: sel.value || null, run });
-    const rows = run.results[sizes[0]].checks.map((c, i) => `<tr><td>${esc(c[0])}</td>` + sizes.map((s) => `<td>${esc(run.results[s].checks[i][1])}</td>`).join("") + "</tr>");
+    const rows = run.results[sizes[0]].checks.map((c, i) => `<tr><td>${esc(c.label)}</td>` + sizes.map((s) => {
+      const k = run.results[s].checks[i];
+      return `<td class="${k.ok === false ? "bad" : k.ok ? "good" : ""}">${esc(k.text)}${k.ok === false ? " ✗" : ""}</td>`;
+    }).join("") + "</tr>");
+    const all = sizes.flatMap((s) => run.results[s].checks).filter((k) => k.ok != null);
+    const bad = all.filter((k) => !k.ok).length;
+    const o = run.opts;
+    $("tolSum").innerHTML = all.length ? (bad ? `<b style="color:#c62828">✗ ${bad} ukuran di luar toleransi</b> (−${o.tolMinus} / +${o.tolPlus} cm)` : `<b style="color:#2e7d32">✓ Semua ukuran masuk toleransi</b> (−${o.tolMinus} / +${o.tolPlus} cm)`) +
+      (o.aim ? ` · pola +${o.aim} cm` : "") + (o.shrinkL || o.shrinkW ? ` · susut ${o.shrinkL}% panjang, ${o.shrinkW}% lebar` : "") : "";
+    const notes = String(o.notes || "").split(/\n+/).filter((l) => l.trim());
+    $("specBox").innerHTML = notes.length ? `<p class="note" style="margin-top:12px"><b>Catatan penjahit:</b><br>${notes.map(esc).join("<br>")}</p>` : "";
     $("checks").innerHTML = "<tr><th>Ukuran</th>" + sizes.map((s, i) => `<th style="color:${P.COLORS[i % P.COLORS.length]}">${esc(s)}</th>`).join("") + "</tr>" + rows.join("");
     $("err2").textContent = "";
   }
@@ -107,7 +119,7 @@
       try {
         const model = MODELS[modelId];
         const chart = clone(state.chart), params = clone(state.params);
-        lastRun = { run: P.runModel(model, chart, params), model, chart, params };
+        lastRun = { run: P.runModel(model, chart, params, Object.assign({}, G, { notes: state.notes || "" })), model, chart, params };
         renderResult();
         if (location.hash !== "#hasil") location.hash = "hasil"; else showView(true);
         showView(true);
@@ -124,7 +136,17 @@
     else showView(false);
   });
 
-  function renderAll() { renderModels(); renderChart(); renderParams(); update(); }
+  function renderGlobal() {
+    for (const k of ["tolMinus", "tolPlus", "aim", "shrinkL", "shrinkW"]) $(k).value = G[k];
+    $("notes").value = state.notes || "";
+  }
+  for (const k of ["tolMinus", "tolPlus", "aim", "shrinkL", "shrinkW"]) $(k).addEventListener("change", () => {
+    const v = parseFloat(String($(k).value).replace(",", "."));
+    G[k] = isNaN(v) ? 0 : v; saveG(); update();
+  });
+  $("notes").addEventListener("input", () => { state.notes = $("notes").value; save(); update(); });
+
+  function renderAll() { renderModels(); renderChart(); renderParams(); renderGlobal(); update(); }
 
   $("pvSize").onchange = () => lastRun && renderResult();
   $("addSize").onclick = () => {
@@ -244,6 +266,7 @@
       if (kind === "clean" && !clean) clean = cleanForOcr(canvas);
       const text = await ocr(kind === "raw" ? canvas : clean, label, psm);
       out.texts.push(text);
+      if (store.get("pola:debug")) console.log("OCR", kind + psm, label, "\n" + text);
       const t = I.parseText(text);
       if (t && t.rows.length >= 2) return { t, text };
     }
@@ -330,7 +353,7 @@
     const allText = out.texts.join("\n");
     const best = out.tables.sort((a, b) => b.t.rows.length - a.t.rows.length)[0];
     const guess = I.guessModel(allText, best && best.t, MODELS);
-    const before = { modelId, state: clone(state) };
+    const before = { modelId, state: clone(state), G: clone(G) };
     let html = "";
     if (guess && guess.id !== modelId) { modelId = guess.id; store.set("pola:model", modelId); state = load(modelId); }
     const M = MODELS[modelId];
@@ -348,12 +371,28 @@
         (out.refs.length ? `<br>Gambar disimpan sebagai referensi dan ikut dicetak di PDF.` : "") +
         (guess ? `<div class="row"><button class="btn" id="undo">Batalkan</button></div>` : "") + `</div>`;
     }
+    // client specs written in the files: rib, neck width, tolerance, notes
+    const sp = I.extractSpecs(out.texts);
+    const used = [];
+    const hasP = (k) => MODELS[modelId].params.some((x) => x.k === k);
+    if (sp.rib && hasP("rib")) { state.params.rib = sp.rib; used.push(`rib kerah ${sp.rib} cm`); }
+    if (sp.neckW && hasP("neckW")) { state.params.neckW = sp.neckW; used.push(`lebar kerung leher ${sp.neckW} cm`); }
+    if (sp.tolPlus != null || sp.tolMinus != null) {
+      if (sp.tolPlus != null) G.tolPlus = sp.tolPlus;
+      if (sp.tolMinus != null) G.tolMinus = sp.tolMinus;
+      if (G.tolMinus === 0 && G.tolPlus > 0) G.aim = Math.min(0.5, G.tolPlus / 2);
+      used.push(`toleransi −${G.tolMinus}/+${G.tolPlus} cm` + (G.aim ? `, pola dibuat +${G.aim} cm` : ""));
+      saveG();
+    }
+    if (sp.notes.length) { state.notes = sp.notes.join("\n"); used.push(`${sp.notes.length} catatan penjahit`); }
+    save();
+    if (used.length) html += `<div class="result"><b>✓ Spesifikasi dari client dipakai:</b> ${esc(used.join("; "))}.<br><span class="note">Bisa diubah di bagian 3 & 4.</span></div>`;
     if (out.skipped.length) html += `<p class="err">Tidak bisa dibaca: ${esc(out.skipped.join(", "))}</p>`;
     $("upResult").innerHTML = html;
     undoState = before;
     const u = $("undo");
     if (u) u.onclick = () => {
-      modelId = undoState.modelId; state = undoState.state; store.set("pola:model", modelId); save();
+      modelId = undoState.modelId; state = undoState.state; Object.assign(G, undoState.G); saveG(); store.set("pola:model", modelId); save();
       $("upResult").innerHTML = ""; renderAll();
     };
     renderAll();
