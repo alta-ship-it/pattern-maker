@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#1f3a5f">
+<title>Produksi Konveksi</title>
+<style>
+  :root { --ink:#18212b; --mute:#66707c; --line:#e3e7ec; --bg:#f4f6f9; --card:#fff; --acc:#1f3a5f; --acc2:#e8eef6; --ok:#2e7d32; --warn:#b26a00; --bad:#c62828; }
+  * { box-sizing:border-box; min-width:0; }
+  html, body { margin:0; background:var(--bg); color:var(--ink); font:16px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+  header.top { position:sticky; top:0; z-index:5; background:var(--acc); color:#fff; padding:calc(10px + env(safe-area-inset-top)) 16px 10px; display:flex; align-items:center; gap:10px; }
+  header.top h1 { font-size:17px; margin:0; flex:1; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  header.top button { background:none; border:none; color:#fff; font-size:20px; min-width:40px; min-height:40px; cursor:pointer; }
+  .sync { font-size:12px; opacity:.9; }
+  main { max-width:900px; margin:auto; padding:12px 12px calc(90px + env(safe-area-inset-bottom)); }
+  nav.bottom { position:fixed; bottom:0; left:0; right:0; background:#fff; border-top:1px solid var(--line); display:flex; padding-bottom:env(safe-area-inset-bottom); z-index:5; }
+  nav.bottom a { flex:1; text-align:center; padding:8px 2px 6px; font-size:11.5px; color:var(--mute); text-decoration:none; }
+  nav.bottom a .i { display:block; font-size:21px; line-height:1.2; }
+  nav.bottom a.on { color:var(--acc); font-weight:700; }
+  nav.bottom a.scan .i { background:var(--acc); color:#fff; width:46px; height:46px; line-height:46px; border-radius:50%; margin:-18px auto 2px; box-shadow:0 3px 8px #0003; }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:12px; padding:14px; margin-bottom:12px; }
+  .card h2 { font-size:15px; margin:0 0 10px; }
+  .row { display:flex; gap:8px; flex-wrap:wrap; align-items:center; }
+  .grow { flex:1; }
+  .btn { border:1px solid var(--acc); background:#fff; color:var(--acc); border-radius:10px; padding:10px 14px; font-size:15px; min-height:44px; cursor:pointer; }
+  .btn.solid { background:var(--acc); color:#fff; }
+  .btn.small { padding:6px 10px; min-height:34px; font-size:13.5px; }
+  .btn.danger { border-color:var(--bad); color:var(--bad); }
+  .btn:disabled { opacity:.5; }
+  .btn.block { width:100%; }
+  label.f { display:block; font-size:12.5px; color:var(--mute); margin:8px 0 3px; }
+  input, select, textarea { width:100%; padding:10px; border:1px solid var(--line); border-radius:9px; font:inherit; font-size:16px; background:#fff; }
+  .grid2 { display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1fr); gap:0 10px; }
+  table { border-collapse:collapse; width:100%; font-size:14px; }
+  th, td { border-bottom:1px solid var(--line); padding:7px 6px; text-align:left; }
+  th { font-size:12px; color:var(--mute); font-weight:600; }
+  td.n, th.n { text-align:right; white-space:nowrap; }
+  .scroll { overflow-x:auto; }
+  .mx input { width:58px; padding:7px; text-align:right; }
+  .list a.item { display:block; text-decoration:none; color:inherit; }
+  .item { padding:12px 0; border-bottom:1px solid var(--line); }
+  .item:last-child { border-bottom:none; }
+  .item .t { font-weight:700; }
+  .item .s { font-size:13px; color:var(--mute); }
+  .pill { display:inline-block; font-size:12px; padding:2px 8px; border-radius:99px; background:var(--acc2); color:var(--acc); white-space:nowrap; }
+  .pill.ok { background:#e6f4ea; color:var(--ok); } .pill.warn { background:#fff4e0; color:var(--warn); } .pill.bad { background:#fdecea; color:var(--bad); }
+  .bar { height:8px; background:var(--line); border-radius:9px; overflow:hidden; }
+  .bar i { display:block; height:100%; background:var(--acc); }
+  .bar.ok i { background:var(--ok); }
+  .prog { display:grid; grid-template-columns:90px minmax(0,1fr) 92px; gap:8px; align-items:center; font-size:13.5px; margin:6px 0; }
+  .prog .v { text-align:right; white-space:nowrap; }
+  .big { font-size:26px; font-weight:800; }
+  .muted { color:var(--mute); font-size:13px; }
+  .toast { position:fixed; left:50%; bottom:96px; transform:translateX(-50%); background:#222; color:#fff; padding:10px 16px; border-radius:10px; font-size:14px; z-index:20; max-width:90vw; }
+  .err { color:var(--bad); font-size:14px; }
+  #video { width:100%; border-radius:12px; background:#000; aspect-ratio:3/4; object-fit:cover; display:block; }
+  .scanbox { position:relative; }
+  .scanbox .frame { position:absolute; inset:18% 14%; border:3px solid #fff8; border-radius:14px; pointer-events:none; }
+  .chips { display:flex; gap:6px; flex-wrap:wrap; }
+  .chips button { border:1px solid var(--line); background:#fff; border-radius:99px; padding:8px 12px; font-size:14px; min-height:40px; cursor:pointer; }
+  .chips button.on { background:var(--acc); border-color:var(--acc); color:#fff; }
+  .kpi { display:grid; grid-template-columns:repeat(3, minmax(0,1fr)); gap:8px; }
+  .kpi div { background:var(--acc2); border-radius:10px; padding:10px; }
+  .kpi b { display:block; font-size:20px; }
+  .kpi span { font-size:12px; color:var(--mute); }
+  details summary { cursor:pointer; padding:6px 0; }
+  .demo { background:#fff4e0; color:#7a4b00; font-size:13px; padding:8px 12px; border-radius:10px; margin-bottom:12px; }
+</style>
+</head>
+<body>
+<header class="top">
+  <button id="hBack" aria-label="Kembali" hidden>←</button>
+  <h1 id="hTitle">Produksi</h1>
+  <span class="sync" id="sync"></span>
+  <button id="hRefresh" aria-label="Muat ulang data">⟳</button>
+</header>
+<main id="view"></main>
+<nav class="bottom" id="nav">
+  <a href="#sk" data-r="sk"><span class="i">📋</span>SK</a>
+  <a href="#status" data-r="status"><span class="i">📊</span>Status</a>
+  <a href="#scan" data-r="scan" class="scan"><span class="i">⌖</span>Scan</a>
+  <a href="#gaji" data-r="gaji"><span class="i">💰</span>Gaji</a>
+  <a href="#menu" data-r="menu"><span class="i">☰</span>Menu</a>
+</nav>
+<script src="../lib/jspdf.umd.min.js"></script>
+<script src="lib/qrcode.js"></script>
+<script src="lib/jsQR.js"></script>
+<script src="db.js"></script>
+<script src="reports.js"></script>
+<script src="app.js"></script>
+</body>
+</html>

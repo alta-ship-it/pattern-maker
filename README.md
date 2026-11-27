@@ -9,6 +9,12 @@ Aplikasi web untuk membuat **pola jahit otomatis dari size chart**. Isi ukuran j
 
 Aplikasi ini jalan sepenuhnya di browser (HP atau laptop) tanpa server dan tanpa login. Size chart yang diisi tersimpan otomatis di browser.
 
+## Aplikasi Produksi (`/produksi`)
+
+Link: **https://alta-ship-it.github.io/pattern-maker/produksi/**
+
+Aplikasi ini mencakup SK/PO per warna × size, catatan marker, pembuatan ikat + label QR (stiker A4 isi 24 atau thermal 50×30), scan QR pakai kamera HP untuk mencatat proses dan penjahit, status produksi, gaji borongan otomatis (rekap + slip PDF), serta laporan cutting dan laporan produksi. Data disimpan di Google Sheets milik sendiri lewat Apps Script. Cara pasangnya ada di [produksi/PANDUAN.md](produksi/PANDUAN.md). Aplikasinya juga punya mode coba yang langsung bisa dipakai tanpa setup.
+
 ## Upload file dari client
 
 Di bagian **Upload file dari client** Kakak bisa memasukkan file dari client:
