@@ -40,6 +40,21 @@
   .err { color:#b00020; font-size:14px; white-space:pre-wrap; }
   select { padding:8px; border-radius:8px; border:1px solid var(--line); font-size:14px; }
   .note { font-size:12.5px; color:var(--mute); line-height:1.5; }
+  .opt { text-transform:none; letter-spacing:0; color:var(--mute); font-weight:400; font-size:13px; }
+  .drop { display:block; border:2px dashed #d7c3cc; border-radius:12px; padding:18px 14px; text-align:center; cursor:pointer; background:var(--acc2); }
+  .drop.over { border-color:var(--acc); }
+  .drop input { position:absolute; width:1px; height:1px; opacity:0; }
+  .drop strong { display:block; color:var(--acc); font-size:15px; }
+  .drop span { display:block; font-size:13px; color:var(--mute); margin-top:4px; }
+  .result { margin-top:10px; padding:10px 12px; border-radius:10px; background:#f4faf5; border:1px solid #cfe6d4; font-size:14px; }
+  .result.warn { background:#fff8ec; border-color:#f0dcb4; }
+  .result ul { margin:6px 0 0; padding-left:18px; color:#7a5a12; font-size:13px; }
+  .refs { display:flex; gap:8px; overflow-x:auto; margin-top:10px; }
+  .refs figure { margin:0; position:relative; flex:0 0 auto; }
+  .refs img { height:120px; border-radius:8px; border:1px solid var(--line); display:block; }
+  .refs button { position:absolute; top:4px; right:4px; border:none; border-radius:999px; background:#000a; color:#fff; width:26px; height:26px; cursor:pointer; }
+  .bar { height:6px; background:var(--line); border-radius:9px; overflow:hidden; margin-top:8px; }
+  .bar i { display:block; height:100%; width:0; background:var(--acc); transition:width .2s; }
   @media (min-width: 900px) { main { grid-template-columns: minmax(0,1fr) minmax(0,1fr); } .wide { grid-column: 1 / -1; } }
 </style>
 </head>
@@ -49,6 +64,18 @@
   <p>Isi size chart → pola semua size jadi otomatis → download PDF (plotter 1:1 atau A4).</p>
 </header>
 <main>
+  <section class="card wide upl">
+    <h2>Upload file dari client <span class="opt">(opsional)</span></h2>
+    <label class="drop" id="drop">
+      <input type="file" id="file" multiple accept=".xlsx,.xls,.csv,.pdf,image/*">
+      <strong>Pilih atau seret file ke sini</strong>
+      <span>Size chart (Excel, CSV, foto/screenshot, PDF) dan mockup/PO. Model & ukuran dibaca otomatis.</span>
+    </label>
+    <div id="upStatus" class="note" aria-live="polite"></div>
+    <div id="upResult"></div>
+    <div id="refs" class="refs"></div>
+  </section>
+
   <section class="card wide">
     <h2>1. Pilih model</h2>
     <div class="models" id="models"></div>
@@ -101,6 +128,7 @@
 <script src="lib/jspdf.umd.min.js"></script>
 <script src="engine.js"></script>
 <script src="pdf.js"></script>
+<script src="importer.js"></script>
 <script src="app.js"></script>
 </body>
 </html>

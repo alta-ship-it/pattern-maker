@@ -164,11 +164,12 @@
   }
 
   // ---------- PLOTTER ----------
-  function plotterPDF(model, chart, params, width = 150) {
+  function plotterPDF(model, chart, params, width = 150, opts = {}) {
     const run = runModel(model, chart, params);
     const lay = layout(run, width - 6);
     const lines = infoLines(model, chart);
-    const infoH = 4 + lines.length * 0.7;
+    const ref = (opts.refs || [])[0];
+    const infoH = Math.max(4 + lines.length * 0.7, ref ? 14 : 0);
     const W = width, H = lay.H + 6 + infoH;
     const jsPDF = getJsPDF();
     const doc = new jsPDF({ unit: "cm", format: [W, H], orientation: W > H ? "l" : "p", compress: true });
@@ -178,12 +179,18 @@
     tp.text([3, H - 3], `POLA ${model.name.toUpperCase()}  |  ${run.sizes.join(" - ")}  |  SKALA 1:1 (PLOTTER)`, 28, true);
     tp.text([3, H - 3.9], `Cetak 100% / actual size, cek KOTAK UJI 5x5 cm. Kampuh ${params.sa} cm${params.hem ? `, kelim ${params.hem} cm` : ""} sudah termasuk. Garis putus tipis = garis jahit.`, 14);
     lines.forEach((l, i) => tp.text([3, H - 4.8 - i * 0.7], l, 13));
+    if (ref) {
+      const ih = infoH - 2, iw = Math.min(ih * ref.w / ref.h, W * 0.4);
+      const h2 = iw * ref.h / ref.w;
+      try { doc.addImage(ref.data, ref.type || "JPEG", W - 3 - iw, 1.5, iw, h2); } catch (e) { /* skip broken image */ }
+      tp.text([W - 3 - iw, H - 1.5 - h2 - 0.4], "Referensi dari client", 11, true);
+    }
     return { doc, run, W, H };
   }
 
   // ---------- A4 ----------
   const A4W = 21, A4H = 29.7, MG = 1, TW = A4W - 2 * MG, TH = A4H - 2 * MG;
-  function a4PDF(model, chart, params) {
+  function a4PDF(model, chart, params, opts = {}) {
     const run = runModel(model, chart, params);
     const LW = TW * 6 - 4;
     const lay = layout(run, LW);
@@ -202,9 +209,12 @@
     }
     const jsPDF = getJsPDF();
     const doc = new jsPDF({ unit: "cm", format: "a4", compress: true });
+    const refs = opts.refs || [];
+    const first = refs.length ? 4 : 3; // page number of the first tile
     cover(doc, model, chart, params, run);
+    if (refs.length) { doc.addPage(); refPage(doc, refs); }
     doc.addPage();
-    mapPage(doc, run, lay, rows, cols, tiles, ox, oy);
+    mapPage(doc, run, lay, rows, cols, tiles, ox, oy, first);
     tiles.forEach(([r, c], n) => {
       doc.addPage();
       const x0 = c * TW, y0 = totalH - (r + 1) * TH;
@@ -220,11 +230,11 @@
       for (const [x, y] of [[MG + TW / 2, MG], [MG + TW / 2, MG + TH], [MG, MG + TH / 2], [MG + TW, MG + TH / 2]]) doc.circle(x, y, 0.35, "S");
       const lab = `${String.fromCharCode(65 + r)}${c + 1}`;
       doc.setFont("helvetica", "normal"); doc.setFontSize(8); doc.setTextColor(85, 85, 85);
-      doc.text(`${model.name} ${run.sizes.join("-")}  |  hal. ${n + 3}  |  posisi ${lab}`, MG + 0.2, 0.7);
+      doc.text(`${model.name} ${run.sizes.join("-")}  |  hal. ${n + first}  |  posisi ${lab}`, MG + 0.2, 0.7);
       doc.setFont("helvetica", "bold"); doc.setFontSize(14);
       doc.text(lab, A4W - MG - 1.6, A4H - 0.25);
     });
-    return { doc, run, pages: tiles.length + 2 };
+    return { doc, run, pages: tiles.length + first - 1 };
   }
 
   function cover(doc, model, chart, params, run) {
@@ -234,7 +244,7 @@
     let y = 4.4;
     t(1.5, y, "CARA CETAK", 12, true); y += 0.6;
     ["1. Print ukuran asli: 100% / 'Actual size' (JANGAN 'Fit to page').", "2. Ukur KOTAK UJI 5x5 cm (kanan bawah). Kalau meleset, cek setting printer.",
-      "3. Potong tepi kertas, sambung sesuai kode A1, A2, B1... (lihat peta hal. 2).", "   Tepatkan bulatan di tiap tepi kertas, lalu selotip.", "4. Untuk konveksi lebih praktis pakai file PLOTTER (skala 1:1)."]
+      "3. Potong tepi kertas, sambung sesuai kode A1, A2, B1... (lihat halaman PETA).", "   Tepatkan bulatan di tiap tepi kertas, lalu selotip.", "4. Untuk konveksi lebih praktis pakai file PLOTTER (skala 1:1)."]
       .forEach((l) => { t(1.5, y, l, 9); y += 0.5; });
     y += 0.4; t(1.5, y, "UKURAN JADI (flat), cm", 12, true); y += 0.65;
     const xs = [1.5].concat(model.fields.map((_, i) => 3.6 + i * 3.1));
@@ -264,7 +274,22 @@
     drawTest(doc, pen, [13, 0.6]);
   }
 
-  function mapPage(doc, run, lay, rows, cols, tiles, ox, oy) {
+  function refPage(doc, refs) {
+    doc.setFont("helvetica", "bold"); doc.setFontSize(18); doc.setTextColor(0, 0, 0);
+    doc.text("REFERENSI DARI CLIENT", 1.5, 2.4);
+    let y = 3.2;
+    const maxW = 18, gap = 0.6, list = refs.slice(0, 3);
+    const avail = 29.7 - 1.2 - y - gap * (list.length - 1);
+    for (const r of list) {
+      let w = maxW, h = w * r.h / r.w;
+      const hMax = avail / list.length;
+      if (h > hMax) { h = hMax; w = h * r.w / r.h; }
+      try { doc.addImage(r.data, r.type || "JPEG", 1.5, y, w, h); } catch (e) { /* skip */ }
+      y += h + gap;
+    }
+  }
+
+  function mapPage(doc, run, lay, rows, cols, tiles, ox, oy, first = 3) {
     doc.setFont("helvetica", "bold"); doc.setFontSize(18); doc.setTextColor(0, 0, 0);
     doc.text("PETA SAMBUNGAN HALAMAN", 1.5, 2.4);
     doc.setFont("helvetica", "normal"); doc.setFontSize(9);
@@ -284,7 +309,7 @@
         doc.text(nm, a[0] + 0.1, a[1] + 0.35, { maxWidth: c[0] - a[0] - 0.2 });
       }
     }
-    const idx = new Map(tiles.map((t, i) => [t.join(","), i + 3]));
+    const idx = new Map(tiles.map((t, i) => [t.join(","), i + first]));
     for (let r = 0; r < rows; r++) for (let c = 0; c < cols; c++) {
       const on = idx.has(`${r},${c}`);
       const a = P(c * TW, totalH - r * TH);

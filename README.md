@@ -9,6 +9,17 @@ Aplikasi web untuk membuat **pola jahit otomatis dari size chart**. Isi ukuran j
 
 Aplikasi ini jalan sepenuhnya di browser (HP atau laptop) tanpa server dan tanpa login. Size chart yang diisi tersimpan otomatis di browser.
 
+## Upload file dari client
+
+Di bagian **Upload file dari client** Kakak bisa memasukkan file dari client:
+
+- **Excel / CSV**: size chart langsung dibaca ke tabel.
+- **Foto / screenshot size chart**: tulisannya dibaca otomatis (OCR).
+- **PDF (PO / tech pack)**: teksnya dibaca untuk menebak model dan mencari size chart, dan halaman pertamanya disimpan sebagai gambar referensi.
+- **Gambar mockup**: disimpan sebagai referensi dan ikut dicetak di PDF pola.
+
+Model ditebak dari tulisan di file (misalnya "coach jacket", "kemeja", "celana"). Ukuran lingkar penuh otomatis dibagi 2 menjadi ukuran flat, dan kolom yang tidak ada diisi angka contoh. Semua hal itu ditampilkan sebagai catatan supaya bisa dicek ulang. Tombol **Batalkan** mengembalikan tabel seperti sebelum upload. Semua file diproses di browser dan tidak dikirim ke server mana pun.
+
 ## Model yang tersedia
 
 | Model | Potongan |
@@ -36,7 +47,8 @@ Semua pola sudah termasuk kampuh, kelim, takik (1 = depan, 2 = belakang), arah s
 
 - `engine.js`: mesin pola. Isinya geometri, kampuh otomatis, dan rumus tiap model (`MODELS`).
 - `pdf.js`: susunan potongan, export PDF plotter dan A4 (jsPDF), dan preview SVG.
-- `app.js`, `index.html`: tampilan aplikasi.
+- `importer.js`: membaca size chart dari Excel/CSV/OCR dan menebak model.
+- `app.js`, `index.html`: tampilan aplikasi. Library SheetJS, Tesseract.js (OCR), dan pdf.js baru dimuat dari CDN saat ada file yang di-upload.
 - `lib/jspdf.umd.min.js`: jsPDF 2.5.1 (MIT).
 - `tools/generate-samples.js`: membuat contoh PDF semua model lewat Node (`npm install && npm run samples`).
 
